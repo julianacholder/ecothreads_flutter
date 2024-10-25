@@ -21,7 +21,7 @@ class MyApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       title: 'EcoThreads',
       theme: ThemeData(primaryColor: AppColors.primary),
-      home: const MainScreen(), // Start with MainScreen
+      home: const MainScreen(), // Change if you want to see your page
       routes: {
         '/login': (context) => const LoginPage(),
         '/loading': (context) => const LoadingPage(),
@@ -137,7 +137,7 @@ class _MainScreenState extends State<MainScreen> {
                       color: Colors.white,
                     ),
                   ),
-                const SizedBox(height: 2.0), // Added bottom padding
+                const SizedBox(height: 2.0),
               ],
             ),
           ),
