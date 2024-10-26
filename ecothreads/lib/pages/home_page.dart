@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
+// import 'package:google_fonts/google_fonts.dart';
 
 class HomePage extends StatelessWidget {
   const HomePage({Key? key}) : super(key: key);
@@ -61,17 +61,20 @@ class HomePage extends StatelessWidget {
                           children: [
                             Expanded(
                               child: Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 16),
+                                padding:
+                                    const EdgeInsets.symmetric(horizontal: 16),
                                 decoration: BoxDecoration(
                                   color: Colors.grey[100],
                                   borderRadius: BorderRadius.circular(12),
                                 ),
                                 child: TextField(
                                   decoration: InputDecoration(
-                                    icon: Icon(Icons.search, color: Colors.grey[400]),
+                                    icon: Icon(Icons.search,
+                                        color: Colors.grey[400]),
                                     hintText: 'Search clothes...',
                                     border: InputBorder.none,
-                                    hintStyle: TextStyle(color: Colors.grey[400]),
+                                    hintStyle:
+                                        TextStyle(color: Colors.grey[400]),
                                   ),
                                 ),
                               ),
@@ -83,7 +86,8 @@ class HomePage extends StatelessWidget {
                                 color: Colors.black,
                                 borderRadius: BorderRadius.circular(12),
                               ),
-                              child: const Icon(Icons.tune, color: Colors.white),
+                              child:
+                                  const Icon(Icons.tune, color: Colors.white),
                             ),
                           ],
                         ),
@@ -143,9 +147,12 @@ class HomePage extends StatelessWidget {
                           scrollDirection: Axis.horizontal,
                           child: Row(
                             children: [
-                              _buildCategoryButton('All Items', Icons.grid_4x4, true),
-                              _buildCategoryButton('Dress', Icons.checkroom, false),
-                              _buildCategoryButton('T-Shirt', Icons.dry_cleaning, false),
+                              _buildCategoryButton(
+                                  'All Items', Icons.grid_4x4, true),
+                              _buildCategoryButton(
+                                  'Dress', Icons.checkroom, false),
+                              _buildCategoryButton(
+                                  'T-Shirt', Icons.dry_cleaning, false),
                               _buildCategoryButton('Jeans', Icons.style, false),
                             ],
                           ),
@@ -159,7 +166,8 @@ class HomePage extends StatelessWidget {
                 SliverPadding(
                   padding: const EdgeInsets.all(16),
                   sliver: SliverGrid(
-                    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                    gridDelegate:
+                        const SliverGridDelegateWithFixedCrossAxisCount(
                       crossAxisCount: 2,
                       childAspectRatio: 0.75,
                       crossAxisSpacing: 16,
@@ -171,7 +179,7 @@ class HomePage extends StatelessWidget {
                     ),
                   ),
                 ),
-                
+
                 // Bottom spacing for navigation bar
                 const SliverToBoxAdapter(
                   child: SizedBox(height: 80),
@@ -185,7 +193,8 @@ class HomePage extends StatelessWidget {
               right: 16,
               bottom: 16,
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
                 decoration: BoxDecoration(
                   color: Colors.black,
                   borderRadius: BorderRadius.circular(32),
@@ -215,7 +224,8 @@ class HomePage extends StatelessWidget {
       decoration: BoxDecoration(
         color: isSelected ? Colors.black : Colors.white,
         borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: isSelected ? Colors.black : Colors.grey[300]!),
+        border:
+            Border.all(color: isSelected ? Colors.black : Colors.grey[300]!),
       ),
       child: Row(
         children: [
