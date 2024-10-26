@@ -7,6 +7,7 @@ import 'package:ecothreads/pages/usermessages.dart';
 import 'package:ecothreads/pages/userprofile_page.dart';
 import 'package:flutter/material.dart';
 import 'constants/colors.dart';
+import 'package:google_fonts/google_fonts.dart';
 
 void main() {
   runApp(const MyApp());
@@ -20,8 +21,13 @@ class MyApp extends StatelessWidget {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       title: 'EcoThreads',
-      theme: ThemeData(primaryColor: AppColors.primary),
-      home: const MainScreen(), // Start with MainScreen
+      theme: ThemeData(
+        primaryColor: AppColors.primary,
+        textTheme: GoogleFonts.nunitoSansTextTheme(),
+        // This ensures even the primary theme text uses Nunito Sans
+        primaryTextTheme: GoogleFonts.nunitoSansTextTheme(),
+      ),
+      home: const MainScreen(),
       routes: {
         '/login': (context) => const LoginPage(),
         '/loading': (context) => const LoadingPage(),
@@ -42,28 +48,30 @@ class MainScreen extends StatefulWidget {
 }
 
 class _MainScreenState extends State<MainScreen> {
-  int _selectedIndex = 0; // Current selected index
+  int _selectedIndex = 0;
 
   final List<Widget> _pages = const [
     HomePage(),
     CheckoutPage(),
     DonatePage(),
     UserMessages(),
-    UserProfile(), // UserProfile
+    UserProfile(),
   ];
 
   void _onItemTapped(int index) {
     setState(() {
-      _selectedIndex = index; // Update selected index
+      _selectedIndex = index;
     });
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: _pages[_selectedIndex], // Current page based on index
-      bottomNavigationBar: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 10.0),
+      body: _pages[_selectedIndex],
+      extendBody:
+          true, // Add this to make the body extend behind the navigation bar
+      bottomNavigationBar: Container(
+        margin: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 10.0),
         child: ClipRRect(
           borderRadius: BorderRadius.circular(44),
           child: BottomNavigationBar(
@@ -105,7 +113,6 @@ class _MainScreenState extends State<MainScreen> {
     );
   }
 
-  // Method to build the icon with the circle and effect
   Widget _buildIcon(IconData icon, bool isSelected) {
     return Container(
       decoration: BoxDecoration(
@@ -127,7 +134,7 @@ class _MainScreenState extends State<MainScreen> {
                   size: 26.0,
                   color: Colors.white,
                 ),
-                const SizedBox(height: 2.0), // Added spacing
+                const SizedBox(height: 2.0),
                 if (isSelected)
                   Container(
                     width: 6.0,
@@ -137,7 +144,7 @@ class _MainScreenState extends State<MainScreen> {
                       color: Colors.white,
                     ),
                   ),
-                const SizedBox(height: 2.0), // Added bottom padding
+                const SizedBox(height: 2.0),
               ],
             ),
           ),
@@ -146,7 +153,6 @@ class _MainScreenState extends State<MainScreen> {
     );
   }
 }
-
 
 
 //   @override

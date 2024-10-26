@@ -5,8 +5,13 @@ class HomePage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: Text('data'),
+    return const Scaffold(
+      body: Padding(
+        padding: EdgeInsets.symmetric(horizontal: 20),
+        child: Column(
+          children: [Text('Donate Clothes')],
+        ),
+      ),
     );
   }
 }
