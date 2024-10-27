@@ -1,11 +1,13 @@
+import 'package:flutter/material.dart';
 import 'package:ecothreads/pages/checkout.dart';
 import 'package:ecothreads/pages/donate_page.dart';
 import 'package:ecothreads/pages/home_page.dart';
 import 'package:ecothreads/pages/loading_page.dart';
 import 'package:ecothreads/pages/login_page.dart';
+import 'package:ecothreads/pages/signup_page.dart';
 import 'package:ecothreads/pages/usermessages.dart';
 import 'package:ecothreads/pages/userprofile_page.dart';
-import 'package:flutter/material.dart';
+import 'package:ecothreads/pages/onboarding_page.dart';
 import 'constants/colors.dart';
 import 'package:google_fonts/google_fonts.dart';
 
@@ -24,17 +26,19 @@ class MyApp extends StatelessWidget {
       theme: ThemeData(
         primaryColor: AppColors.primary,
         textTheme: GoogleFonts.nunitoSansTextTheme(),
-        // This ensures even the primary theme text uses Nunito Sans
         primaryTextTheme: GoogleFonts.nunitoSansTextTheme(),
       ),
-      home: const MainScreen(),
+      home: const LoadingPage(),
       routes: {
+        '/main': (context) => const MainScreen(),
         '/login': (context) => const LoginPage(),
-        '/loading': (context) => LoadingPage(),
+        '/signup': (context) => const SignUpPage(),
+        '/loading': (context) => const LoadingPage(),
         '/donate': (context) => const DonatePage(),
         '/usermessages': (context) => const UserMessages(),
         '/userprofile': (context) => const UserProfile(),
         '/checkout': (context) => CheckoutPage(),
+        '/onboarding': (context) => const OnboardingPage(),
       },
     );
   }

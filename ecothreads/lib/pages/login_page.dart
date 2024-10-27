@@ -138,7 +138,7 @@ class _LoginPageState extends State<LoginPage> {
               // Login Button
               ElevatedButton(
                 onPressed: () {
-                  // Add login logic
+                  Navigator.pushNamed(context, '/editprofile');
                 },
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.grey[300],
