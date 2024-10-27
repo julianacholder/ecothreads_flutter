@@ -19,7 +19,8 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 version: 1.0.0+1
 
 environment:
-  sdk: ^3.5.2
+  sdk: ">=3.5.2 <4.0.0"
+
 
 # Dependencies specify other packages that your package needs in order to work.
 # To automatically upgrade your package dependencies to the latest versions
@@ -57,7 +58,15 @@ dev_dependencies:
 # The following section is specific to Flutter packages.
 flutter:
   assets:
-    - assets/images/
+     - assets/images/loadinglogo.png
+     - assets/images/hanging.jpg  
+     - assets/images/Corry.png  
+     - assets/images/Miss.png 
+     - assets/images/Elsa.png 
+     - assets/images/Christian.png
+     - assets/images/Mabel.png
+     - assets/images/Mariam.png 
+     - assets/images/Juana.png  
 
 
   # The following line ensures that the Material Icons font is
