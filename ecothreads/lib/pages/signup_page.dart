@@ -167,7 +167,12 @@ class _SignUpPageState extends State<SignUpPage> {
               // Create Account Button
               ElevatedButton(
                 onPressed: () {
-                  // Add signup logic
+                  Navigator.pushNamedAndRemoveUntil(
+                    context,
+                    '/main',
+                    (route) => false,
+                    arguments: 4,
+                  );
                 },
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.grey[300],

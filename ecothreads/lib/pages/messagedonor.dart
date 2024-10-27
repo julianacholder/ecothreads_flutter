@@ -2,10 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart'; // Importing intl package for date formatting
 
 void main() {
-  runApp(MyApp());
+  runApp(Messagedonor());
 }
 
-class MyApp extends StatelessWidget {
+class Messagedonor extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
@@ -25,7 +25,8 @@ class ChatScreen extends StatefulWidget {
 
 class _ChatScreenState extends State<ChatScreen> {
   final TextEditingController messageController = TextEditingController();
-  final List<Map<String, dynamic>> messages = []; // Changed to dynamic to support voice messages
+  final List<Map<String, dynamic>> messages =
+      []; // Changed to dynamic to support voice messages
 
   void _sendMessage() {
     if (messageController.text.isNotEmpty) {
@@ -80,17 +81,19 @@ class _ChatScreenState extends State<ChatScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        leading: Container(
-          padding: EdgeInsets.all(6), // Add padding around the icon
-          decoration: BoxDecoration(
-            color: Colors.grey, // Set the background color to grey
-            shape: BoxShape.circle, // Make it circular
-          ),
-          child: IconButton(
-            icon: Icon(Icons.arrow_back_ios, color: Colors.white), // Icon with white color for contrast
-            onPressed: () {
-              Navigator.pop(context); // Navigate back on button press
-            },
+        leading: GestureDetector(
+          onTap: () => Navigator.pop(context),
+          child: Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: Colors.grey.shade100,
+            ),
+            child: const Icon(
+              Icons.arrow_back_ios_new,
+              size: 20,
+              color: Colors.black,
+            ),
           ),
         ),
         title: Center(child: Text('Messages')), // Centered title
@@ -120,14 +123,19 @@ class _ChatScreenState extends State<ChatScreen> {
 
                 // Check if it's the first message of the day or from a new sender
                 bool showDate = false;
-                if (index == 0 || message["date"] != messages[index - 1]["date"] || messages[index - 1]["isSent"] != isSent) {
+                if (index == 0 ||
+                    message["date"] != messages[index - 1]["date"] ||
+                    messages[index - 1]["isSent"] != isSent) {
                   showDate = true;
                 }
 
                 return Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 4.0, horizontal: 8.0),
+                  padding: const EdgeInsets.symmetric(
+                      vertical: 4.0, horizontal: 8.0),
                   child: Column(
-                    crossAxisAlignment: isSent ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+                    crossAxisAlignment: isSent
+                        ? CrossAxisAlignment.end
+                        : CrossAxisAlignment.start,
                     children: [
                       if (showDate)
                         Center(
@@ -140,7 +148,10 @@ class _ChatScreenState extends State<ChatScreen> {
                         margin: EdgeInsets.only(top: 4.0),
                         padding: EdgeInsets.all(10.0),
                         decoration: BoxDecoration(
-                          color: isSent ? Colors.black : Colors.grey[300], // Change color to black for sent messages
+                          color: isSent
+                              ? Colors.black
+                              : Colors.grey[
+                                  300], // Change color to black for sent messages
                           borderRadius: BorderRadius.circular(8),
                         ),
                         child: Column(
@@ -148,13 +159,19 @@ class _ChatScreenState extends State<ChatScreen> {
                           children: [
                             Text(
                               message["text"]!,
-                              style: TextStyle(fontSize: 16, color: isSent ? Colors.white : Colors.black), // Change text color to white for readability
+                              style: TextStyle(
+                                  fontSize: 16,
+                                  color: isSent
+                                      ? Colors.white
+                                      : Colors
+                                          .black), // Change text color to white for readability
                             ),
                             SizedBox(height: 4),
                             // Display the time below the message text
                             Text(
                               message["time"]!,
-                              style: TextStyle(fontSize: 10, color: Colors.grey),
+                              style:
+                                  TextStyle(fontSize: 10, color: Colors.grey),
                             ),
                           ],
                         ),

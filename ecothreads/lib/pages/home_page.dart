@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '../pages/itemdetail.dart'; // Import the ProductPage here
 
 class HomePage extends StatefulWidget {
   const HomePage({Key? key}) : super(key: key);
@@ -151,15 +152,12 @@ class _HomePageState extends State<HomePage> {
         decoration: const BoxDecoration(
           image: DecorationImage(
             image: AssetImage('assets/images/friends.jpg'),
-            fit: BoxFit
-                .cover, // Add this to make image cover the entire container
+            fit: BoxFit.cover,
           ),
         ),
-        // Add a dark overlay to make text more readable
         child: Container(
           decoration: BoxDecoration(
-            color:
-                Colors.black.withOpacity(0.3), // Add a semi-transparent overlay
+            color: Colors.black.withOpacity(0.3),
           ),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -170,8 +168,7 @@ class _HomePageState extends State<HomePage> {
                   'Invite\nYour\nFriends',
                   style: TextStyle(
                     fontWeight: FontWeight.bold,
-                    color:
-                        Colors.white, // Change text color for better visibility
+                    color: Colors.white,
                     fontSize: 18,
                   ),
                 ),
@@ -275,91 +272,69 @@ class _HomePageState extends State<HomePage> {
   }
 
   Widget _buildItemCard(Map<String, dynamic> item) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Expanded(
-          child: Container(
-            decoration: BoxDecoration(
-              color: Colors.grey[200],
-              borderRadius: BorderRadius.circular(12),
-              image: DecorationImage(
-                image: AssetImage(item['image']),
-                fit: BoxFit.cover,
+    return GestureDetector(
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => ProductPage(item: item),
+          ),
+        );
+      },
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            child: Container(
+              decoration: BoxDecoration(
+                color: Colors.grey[200],
+                borderRadius: BorderRadius.circular(12),
+                image: DecorationImage(
+                  image: AssetImage(item['image']),
+                  fit: BoxFit.cover,
+                ),
               ),
             ),
           ),
-        ),
-        const SizedBox(height: 6),
-        Text(
-          item['name'],
-          style: const TextStyle(
-            fontSize: 13,
-            fontWeight: FontWeight.w500,
-          ),
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-        ),
-        Row(
-          children: [
-            Text(
-              'New',
-              style: TextStyle(
-                color: Colors.grey[600],
-                fontSize: 11,
-              ),
+          const SizedBox(height: 6),
+          Text(
+            item['name'],
+            style: const TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w500,
             ),
-            const SizedBox(width: 4),
-            const Icon(Icons.star, color: Colors.amber, size: 12),
-            const Text(
-              ' 5.0',
-              style: TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-          ],
-        ),
-        Text(
-          '${item['points']}pts',
-          style: const TextStyle(
-            fontSize: 13,
-            fontWeight: FontWeight.bold,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
           ),
-        ),
-      ],
-    );
-  }
-
-  // Widget _buildBottomNavigation() {
-  //   return Positioned(
-  //     left: 16,
-  //     right: 16,
-  //     bottom: 16,
-  //     child: Container(
-  //       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-  //       decoration: BoxDecoration(
-  //         color: Colors.black,
-  //         borderRadius: BorderRadius.circular(32),
-  //       ),
-  //       child: Row(
-  //         mainAxisAlignment: MainAxisAlignment.spaceBetween,
-  //         children: [
-  //           _buildNavItem(Icons.home, true),
-  //           _buildNavItem(Icons.shopping_bag_outlined, false),
-  //           _buildNavItem(Icons.add_circle_outline, false),
-  //           _buildNavItem(Icons.chat_bubble_outline, false),
-  //           _buildNavItem(Icons.person_outline, false),
-  //         ],
-  //       ),
-  //     ),
-  //   );
-  // }
-
-  Widget _buildNavItem(IconData icon, bool isSelected) {
-    return Icon(
-      icon,
-      color: isSelected ? Colors.white : Colors.white.withOpacity(0.5),
+          Row(
+            children: [
+              Text(
+                'New',
+                style: TextStyle(
+                  color: Colors.grey[600],
+                  fontSize: 11,
+                ),
+              ),
+              const SizedBox(width: 4),
+              const Icon(Icons.star, color: Colors.amber, size: 12),
+              const Text(
+                ' 5.0',
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ],
+          ),
+          Text(
+            '${item['points']}pts',
+            style: const TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -402,7 +377,7 @@ final List<Map<String, dynamic>> itemsList = [
     'category': 'Dress',
   },
   {
-    'name': 'Pink Shoes',
+    'name': 'Ping Shoes',
     'points': 100,
     'image': 'assets/images/pink.jpg',
     'category': 'Dress',

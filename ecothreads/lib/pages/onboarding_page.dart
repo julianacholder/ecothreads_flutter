@@ -1,4 +1,3 @@
-import 'package:ecothreads/constants/colors.dart';
 import 'package:flutter/material.dart';
 
 class OnboardingPage extends StatelessWidget {

@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
 
 class ProductPage extends StatelessWidget {
+  final Map<String, dynamic> item;
+
+  const ProductPage({Key? key, required this.item}) : super(key: key);
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -23,25 +27,22 @@ class ProductPage extends StatelessWidget {
       ),
       body: SingleChildScrollView(
         child: Padding(
-          padding: const EdgeInsets.all(16.0),
+          padding: const EdgeInsets.only(left: 16.0, right: 16, top: 50),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Product Image
               ClipRRect(
                 borderRadius: BorderRadius.circular(16),
                 child: Image.asset(
-                  'assets/images/green bag.jpg',
+                  item['image'],
                   fit: BoxFit.cover,
                   width: double.infinity,
-                  height: 300,
+                  height: 350,
                 ),
               ),
               SizedBox(height: 16),
-              
-              // Product Title and Rating
               Text(
-                'Vintage green bag',
+                item['name'],
                 style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
               ),
               Row(
@@ -58,15 +59,11 @@ class ProductPage extends StatelessWidget {
                 ],
               ),
               SizedBox(height: 8),
-              
-              // Description
               Text(
                 "Its simple and elegant shape makes it perfect for those of you who like minimalist clothes. Read More...",
                 style: TextStyle(color: Colors.grey[600]),
               ),
               SizedBox(height: 16),
-              
-              // Size and Price
               Row(
                 children: [
                   Text(
@@ -82,7 +79,8 @@ class ProductPage extends StatelessWidget {
                     ),
                     child: Text(
                       'M',
-                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                      style:
+                          TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                     ),
                   ),
                   Spacer(),
@@ -91,18 +89,16 @@ class ProductPage extends StatelessWidget {
                     style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                   ),
                   Text(
-                    '\$100 points',
+                    '${item['points']} points',
                     style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                   ),
                 ],
               ),
               SizedBox(height: 16),
-              
-              // Donor Information
               Row(
                 children: [
                   CircleAvatar(
-                    backgroundImage: NetworkImage('https://via.placeholder.com/50'),
+                    backgroundImage: AssetImage('assets/images/donor.png'),
                   ),
                   SizedBox(width: 8),
                   Text(
@@ -116,21 +112,20 @@ class ProductPage extends StatelessWidget {
                 ],
               ),
               SizedBox(height: 24),
-              
-              // Action Buttons
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                 children: [
                   ElevatedButton.icon(
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.black,
-                      padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      padding:
+                          EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(20),
                       ),
                     ),
                     onPressed: () {
-                      // TODO: Add message donor functionality
+                      Navigator.pushNamed(context, '/message');
                     },
                     icon: Icon(Icons.chat_bubble_outline, color: Colors.white),
                     label: Text(
@@ -141,13 +136,19 @@ class ProductPage extends StatelessWidget {
                   ElevatedButton.icon(
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.black,
-                      padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      padding:
+                          EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(20),
                       ),
                     ),
                     onPressed: () {
-                      // TODO: Add to cart functionality
+                      Navigator.pushNamedAndRemoveUntil(
+                        context,
+                        '/main',
+                        (route) => false,
+                        arguments: 1,
+                      );
                     },
                     icon: Icon(Icons.add_shopping_cart, color: Colors.white),
                     label: Text(

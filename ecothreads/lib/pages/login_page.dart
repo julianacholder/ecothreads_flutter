@@ -138,7 +138,12 @@ class _LoginPageState extends State<LoginPage> {
               // Login Button
               ElevatedButton(
                 onPressed: () {
-                  Navigator.pushNamed(context, '/editprofile');
+                  Navigator.pushNamedAndRemoveUntil(
+                    context,
+                    '/main',
+                    (route) => false,
+                    arguments: 4,
+                  );
                 },
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.grey[300],

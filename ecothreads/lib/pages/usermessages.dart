@@ -32,14 +32,15 @@ class UserMessages extends StatelessWidget {
         centerTitle: true,
         title: Text(
           'Messages',
-          style: TextStyle(color: Colors.black, fontSize: 20, fontWeight: FontWeight.bold),
+          style: TextStyle(
+              color: Colors.black, fontSize: 20, fontWeight: FontWeight.bold),
         ),
       ),
       body: Column(
         children: [
-          SizedBox(height: 10), 
+          SizedBox(height: 10),
           Divider(color: Colors.grey, indent: 45.0, endIndent: 45.0),
-          SizedBox(height: 20), 
+          SizedBox(height: 20),
           Expanded(
             child: ListView(
               children: [
@@ -48,7 +49,7 @@ class UserMessages extends StatelessWidget {
                   userName: 'Cory Koss',
                   userTitle: 'Designer',
                   seenTime: 'seen 7:48pm',
-                  imagePath: 'assets/images/Corry.png',
+                  imagePath: 'assets/images/lady.png',
                 ),
                 buildMessageItem(
                   context,
@@ -113,7 +114,8 @@ class UserMessages extends StatelessWidget {
         Navigator.push(
           context,
           MaterialPageRoute(
-            builder: (context) => ChatPage(userName: userName, userTitle: userTitle),
+            builder: (context) =>
+                ChatPage(userName: userName, userTitle: userTitle),
           ),
         );
       },

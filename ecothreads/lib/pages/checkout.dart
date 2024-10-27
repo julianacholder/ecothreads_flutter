@@ -33,26 +33,30 @@ class _CheckoutPageState extends State<CheckoutPage> {
       condition: 'New',
       points: 100,
       size: 'M',
-      imageUrl: 'assets/images/green bag.jpg', // Add comment: Replace with actual image path
+      imageUrl:
+          'assets/images/green bag.jpg', // Add comment: Replace with actual image path
     ),
     CartItem(
       name: 'Vintage kitten heels',
       condition: 'Slightly used',
       points: 50,
       size: 'L',
-      imageUrl: 'assets/images/strawberry.jpg', // Add comment: Replace with actual image path
+      imageUrl:
+          'assets/images/strawberry.jpg', // Add comment: Replace with actual image path
     ),
     CartItem(
       name: 'Pink blouse',
       condition: 'New',
       points: 100,
       size: 'S',
-      imageUrl: 'assets/images/pink blouse.jpg', // Add comment: Replace with actual image path
+      imageUrl:
+          'assets/images/pink blouse.jpg', // Add comment: Replace with actual image path
     ),
   ];
 
   int get totalPoints => cartItems.fold(0, (sum, item) => sum + item.points);
-  int totalAvailablePoints = 30000; // This would normally come from user's account
+  int totalAvailablePoints =
+      30000; // This would normally come from user's account
 
   void _showConfirmationDialog() {
     setState(() {
@@ -190,7 +194,8 @@ class _CheckoutPageState extends State<CheckoutPage> {
         padding: const EdgeInsets.all(16),
         child: Column(
           children: [
-            _buildTotalRow('Total (${cartItems.length} items)', '$totalPoints points'),
+            _buildTotalRow(
+                'Total (${cartItems.length} items)', '$totalPoints points'),
             _buildTotalRow('Total Points', '$totalAvailablePoints points'),
             _buildTotalRow('Discount', '0.00'),
             Divider(),
@@ -221,7 +226,8 @@ class _CheckoutPageState extends State<CheckoutPage> {
         onPressed: hasMessagedDonor ? _showConfirmationDialog : null,
         child: Text('Pay'),
         style: ElevatedButton.styleFrom(
-          minimumSize: Size(double.infinity, 50), backgroundColor: Colors.black,
+          minimumSize: Size(double.infinity, 50),
+          backgroundColor: Colors.black,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(8),
           ),
@@ -264,12 +270,17 @@ class _CheckoutPageState extends State<CheckoutPage> {
                 SizedBox(height: 24),
                 ElevatedButton(
                   onPressed: () {
-                    // Navigate to shop page
-                    Navigator.pop(context);
+                    Navigator.pushNamedAndRemoveUntil(
+                      context,
+                      '/main',
+                      (route) => false,
+                      arguments: 0,
+                    );
                   },
                   child: Text('Shop More'),
                   style: ElevatedButton.styleFrom(
-                    minimumSize: Size(200, 50), backgroundColor: Colors.black,
+                    minimumSize: Size(200, 50),
+                    backgroundColor: Colors.black,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(8),
                     ),

@@ -1,3 +1,5 @@
+import 'package:ecothreads/pages/editprofile_page.dart';
+import 'package:ecothreads/pages/messagedonor.dart';
 import 'package:flutter/material.dart';
 import 'package:ecothreads/pages/checkout.dart';
 import 'package:ecothreads/pages/donate_page.dart';
@@ -29,30 +31,45 @@ class MyApp extends StatelessWidget {
         primaryTextTheme: GoogleFonts.nunitoSansTextTheme(),
       ),
       home: const LoadingPage(),
+      onGenerateRoute: (settings) {
+        // Handle navigation with arguments
+        if (settings.name == '/main') {
+          final int? tabIndex = settings.arguments as int?;
+          return MaterialPageRoute(
+            builder: (context) => MainScreen(initialIndex: tabIndex ?? 0),
+          );
+        }
+        return null;
+      },
       routes: {
-        '/main': (context) => const MainScreen(),
         '/login': (context) => const LoginPage(),
         '/signup': (context) => const SignUpPage(),
         '/loading': (context) => const LoadingPage(),
-        '/donate': (context) => const DonatePage(),
-        '/usermessages': (context) => const UserMessages(),
-        '/userprofile': (context) => const UserProfile(),
-        '/checkout': (context) => CheckoutPage(),
+        '/editprofile': (context) => const EditprofilePage(),
         '/onboarding': (context) => const OnboardingPage(),
+        '/message': (context) => Messagedonor(),
+        '/checkout': (context) => CheckoutPage(),
       },
     );
   }
 }
 
 class MainScreen extends StatefulWidget {
-  const MainScreen({super.key});
+  final int initialIndex;
+  const MainScreen({super.key, this.initialIndex = 0});
 
   @override
   State<MainScreen> createState() => _MainScreenState();
 }
 
 class _MainScreenState extends State<MainScreen> {
-  int _selectedIndex = 0;
+  late int _selectedIndex;
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedIndex = widget.initialIndex;
+  }
 
   final List<Widget> _pages = [
     HomePage(),
@@ -157,7 +174,6 @@ class _MainScreenState extends State<MainScreen> {
     );
   }
 }
-
 
 //   @override
 //   Widget build(BuildContext context) {
