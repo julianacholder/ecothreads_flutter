@@ -1,7 +1,5 @@
 import 'package:flutter/material.dart';
 
-import 'package:flutter/material.dart';
-
 void main() {
   runApp(LoadingPage());
 }
@@ -11,7 +9,7 @@ class LoadingPage extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       home: Scaffold(
-        backgroundColor: Color(0xFF16A637), 
+        backgroundColor: Color(0xFF16A637),
         body: Stack(
           children: [
             // logo
@@ -24,7 +22,7 @@ class LoadingPage extends StatelessWidget {
             ),
             // loading ...
             Positioned(
-              bottom: 40, 
+              bottom: 40,
               left: 0,
               right: 0,
               child: Center(
@@ -39,4 +37,3 @@ class LoadingPage extends StatelessWidget {
     );
   }
 }
-

@@ -31,7 +31,7 @@ class MyApp extends StatelessWidget {
       home: const MainScreen(),
       routes: {
         '/login': (context) => const LoginPage(),
-        '/loading': (context) => const LoadingPage(),
+        '/loading': (context) => LoadingPage(),
         '/donate': (context) => const DonatePage(),
         '/usermessages': (context) => const UserMessages(),
         '/userprofile': (context) => const UserProfile(),
