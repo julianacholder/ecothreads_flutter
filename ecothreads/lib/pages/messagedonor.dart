@@ -1,32 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart'; // Importing intl package for date formatting
 
-void main() {
-  runApp(Messagedonor());
-}
+class MessageDonor extends StatefulWidget {
+  const MessageDonor({super.key});
 
-class Messagedonor extends StatelessWidget {
   @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Chat App',
-      theme: ThemeData(
-        primarySwatch: Colors.blue,
-      ),
-      home: ChatScreen(),
-    );
-  }
+  State<MessageDonor> createState() => _MessageDonorState();
 }
 
-class ChatScreen extends StatefulWidget {
-  @override
-  _ChatScreenState createState() => _ChatScreenState();
-}
-
-class _ChatScreenState extends State<ChatScreen> {
+class _MessageDonorState extends State<MessageDonor> {
   final TextEditingController messageController = TextEditingController();
-  final List<Map<String, dynamic>> messages =
-      []; // Changed to dynamic to support voice messages
+  final List<Map<String, dynamic>> messages = [];
 
   void _sendMessage() {
     if (messageController.text.isNotEmpty) {
@@ -39,7 +23,7 @@ class _ChatScreenState extends State<ChatScreen> {
           "text": messageText,
           "date": messageDate,
           "time": messageTime,
-          "isSent": true, // Mark the message as sent
+          "isSent": true,
         });
       });
       messageController.clear();
@@ -47,13 +31,12 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   void _sendVoiceNote() {
-    // Placeholder for voice note functionality
     String messageDate = DateFormat('EEEE').format(DateTime.now());
     String messageTime = DateFormat('hh:mm a').format(DateTime.now());
 
     setState(() {
       messages.add({
-        "text": "Voice Note", // Placeholder text for the voice note
+        "text": "Voice Note",
         "date": messageDate,
         "time": messageTime,
         "isSent": true,
@@ -62,14 +45,12 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   void _uploadImage() {
-    // Handle image upload here
-    // This is a placeholder for image upload functionality
     String messageDate = DateFormat('EEEE').format(DateTime.now());
     String messageTime = DateFormat('hh:mm a').format(DateTime.now());
 
     setState(() {
       messages.add({
-        "text": "Image Uploaded", // Placeholder text for the image upload
+        "text": "Image Uploaded",
         "date": messageDate,
         "time": messageTime,
         "isSent": true,
@@ -80,11 +61,14 @@ class _ChatScreenState extends State<ChatScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: Colors.white, // Add this
       appBar: AppBar(
+        backgroundColor: Colors.white, // Add this
+        elevation: 0, // Add this
         leading: GestureDetector(
           onTap: () => Navigator.pop(context),
           child: Container(
-            padding: const EdgeInsets.all(8),
+            margin: const EdgeInsets.all(8),
             decoration: BoxDecoration(
               shape: BoxShape.circle,
               color: Colors.grey.shade100,
@@ -96,32 +80,25 @@ class _ChatScreenState extends State<ChatScreen> {
             ),
           ),
         ),
-        title: Center(child: Text('Messages')), // Centered title
+        title: const Text(
+          'Messages',
+          style: TextStyle(color: Colors.black), // Add this
+        ),
+        centerTitle: true,
       ),
       body: Column(
         children: [
-          // Top Separator Line
           Container(
-            height: 2, // Adjust height as needed
-            decoration: BoxDecoration(
-              border: Border(
-                bottom: BorderSide(
-                  color: Colors.grey,
-                  width: 1,
-                  style: BorderStyle.solid,
-                ),
-              ),
-            ),
+            height: 1,
+            color: Colors.grey.shade200,
           ),
-          SizedBox(height: 5), // Add some spacing below the AppBar
+          const SizedBox(height: 5),
           Expanded(
             child: ListView.builder(
               itemCount: messages.length,
               itemBuilder: (context, index) {
                 final message = messages[index];
                 bool isSent = message["isSent"];
-
-                // Check if it's the first message of the day or from a new sender
                 bool showDate = false;
                 if (index == 0 ||
                     message["date"] != messages[index - 1]["date"] ||
@@ -131,7 +108,9 @@ class _ChatScreenState extends State<ChatScreen> {
 
                 return Padding(
                   padding: const EdgeInsets.symmetric(
-                      vertical: 4.0, horizontal: 8.0),
+                    vertical: 4.0,
+                    horizontal: 8.0,
+                  ),
                   child: Column(
                     crossAxisAlignment: isSent
                         ? CrossAxisAlignment.end
@@ -141,17 +120,17 @@ class _ChatScreenState extends State<ChatScreen> {
                         Center(
                           child: Text(
                             message["date"]!,
-                            style: TextStyle(fontSize: 12, color: Colors.grey),
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.grey.shade600,
+                            ),
                           ),
                         ),
                       Container(
-                        margin: EdgeInsets.only(top: 4.0),
-                        padding: EdgeInsets.all(10.0),
+                        margin: const EdgeInsets.only(top: 4.0),
+                        padding: const EdgeInsets.all(10.0),
                         decoration: BoxDecoration(
-                          color: isSent
-                              ? Colors.black
-                              : Colors.grey[
-                                  300], // Change color to black for sent messages
+                          color: isSent ? Colors.black : Colors.grey[300],
                           borderRadius: BorderRadius.circular(8),
                         ),
                         child: Column(
@@ -160,18 +139,19 @@ class _ChatScreenState extends State<ChatScreen> {
                             Text(
                               message["text"]!,
                               style: TextStyle(
-                                  fontSize: 16,
-                                  color: isSent
-                                      ? Colors.white
-                                      : Colors
-                                          .black), // Change text color to white for readability
+                                fontSize: 16,
+                                color: isSent ? Colors.white : Colors.black,
+                              ),
                             ),
-                            SizedBox(height: 4),
-                            // Display the time below the message text
+                            const SizedBox(height: 4),
                             Text(
                               message["time"]!,
-                              style:
-                                  TextStyle(fontSize: 10, color: Colors.grey),
+                              style: TextStyle(
+                                fontSize: 10,
+                                color: isSent
+                                    ? Colors.white.withOpacity(0.7)
+                                    : Colors.grey.shade600,
+                              ),
                             ),
                           ],
                         ),
@@ -182,12 +162,12 @@ class _ChatScreenState extends State<ChatScreen> {
               },
             ),
           ),
-          SizedBox(height: 5), // Add some spacing above the input field
+          const SizedBox(height: 5),
           ChatInputField(
             messageController: messageController,
             onSend: _sendMessage,
-            onVoice: _sendVoiceNote, // Pass the voice note function
-            onUpload: _uploadImage, // Pass the upload function
+            onVoice: _sendVoiceNote,
+            onUpload: _uploadImage,
           ),
         ],
       ),

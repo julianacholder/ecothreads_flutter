@@ -18,7 +18,7 @@ class _LoadingPageState extends State<LoadingPage> {
   }
 
   Future<void> _navigateToOnboarding() async {
-    await Future.delayed(const Duration(seconds: 3));
+    await Future.delayed(const Duration(seconds: 120));
     if (!mounted) return;
 
     Navigator.of(context).pushReplacementNamed('/onboarding');
