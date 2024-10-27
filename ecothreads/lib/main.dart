@@ -3,7 +3,6 @@ import 'package:ecothreads/pages/donate_page.dart';
 import 'package:ecothreads/pages/home_page.dart';
 import 'package:ecothreads/pages/loading_page.dart';
 import 'package:ecothreads/pages/login_page.dart';
-import 'package:ecothreads/pages/onboarding_page.dart';
 import 'package:ecothreads/pages/usermessages.dart';
 import 'package:ecothreads/pages/userprofile_page.dart';
 import 'package:flutter/material.dart';
