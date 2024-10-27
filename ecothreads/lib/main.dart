@@ -28,7 +28,7 @@ class MyApp extends StatelessWidget {
         '/donate': (context) => const DonatePage(),
         '/usermessages': (context) => const UserMessages(),
         '/userprofile': (context) => const UserProfile(),
-        '/checkout': (context) => const CheckoutPage(),
+        '/checkout': (context) => CheckoutPage(),
       },
     );
   }
@@ -46,7 +46,7 @@ class _MainScreenState extends State<MainScreen> {
 
   final List<Widget> _pages = const [
     HomePage(),
-    CheckoutPage(),
+   // CheckoutPage(),
     DonatePage(),
     UserMessages(),
     UserProfile(), // UserProfile

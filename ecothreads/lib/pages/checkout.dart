@@ -33,21 +33,21 @@ class _CheckoutPageState extends State<CheckoutPage> {
       condition: 'New',
       points: 100,
       size: 'M',
-      imageUrl: 'assets/green_bag.jpg', // Add comment: Replace with actual image path
+      imageUrl: 'assets/images/green bag.jpg', // Add comment: Replace with actual image path
     ),
     CartItem(
       name: 'Vintage kitten heels',
       condition: 'Slightly used',
       points: 50,
       size: 'L',
-      imageUrl: 'assets/kitten_heels.jpg', // Add comment: Replace with actual image path
+      imageUrl: 'assets/images/strawberry.jpg', // Add comment: Replace with actual image path
     ),
     CartItem(
       name: 'Pink blouse',
       condition: 'New',
       points: 100,
       size: 'S',
-      imageUrl: 'assets/pink_blouse.jpg', // Add comment: Replace with actual image path
+      imageUrl: 'assets/images/pink blouse.jpg', // Add comment: Replace with actual image path
     ),
   ];
 
