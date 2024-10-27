@@ -29,36 +29,38 @@ class _HomePageState extends State<HomePage> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
-      body: SafeArea(
-        child: Stack(
-          children: [
-            CustomScrollView(
-              slivers: [
-                SliverToBoxAdapter(
-                  child: Padding(
-                    padding: const EdgeInsets.all(16.0),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        _buildHeader(),
-                        const SizedBox(height: 20),
-                        _buildSearchBar(),
-                        const SizedBox(height: 20),
-                        _buildBanner(),
-                        const SizedBox(height: 20),
-                        _buildCategories(),
-                      ],
+      body: Padding(
+        padding: const EdgeInsets.only(top: 50.0),
+        child: SafeArea(
+          child: Stack(
+            children: [
+              CustomScrollView(
+                slivers: [
+                  SliverToBoxAdapter(
+                    child: Padding(
+                      padding: const EdgeInsets.all(16.0),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          _buildHeader(),
+                          const SizedBox(height: 20),
+                          _buildSearchBar(),
+                          const SizedBox(height: 20),
+                          _buildBanner(),
+                          const SizedBox(height: 20),
+                          _buildCategories(),
+                        ],
+                      ),
                     ),
                   ),
-                ),
-                _buildItemsGrid(),
-                const SliverToBoxAdapter(
-                  child: SizedBox(height: 80),
-                ),
-              ],
-            ),
-            _buildBottomNavigation(),
-          ],
+                  _buildItemsGrid(),
+                  const SliverToBoxAdapter(
+                    child: SizedBox(height: 80),
+                  ),
+                ],
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -146,40 +148,54 @@ class _HomePageState extends State<HomePage> {
       child: Container(
         height: 120,
         width: double.infinity,
-        decoration: BoxDecoration(
-          color: Colors.grey[200],
+        decoration: const BoxDecoration(
+          image: DecorationImage(
+            image: AssetImage('assets/images/friends.jpg'),
+            fit: BoxFit
+                .cover, // Add this to make image cover the entire container
+          ),
         ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            const Padding(
-              padding: EdgeInsets.all(16.0),
-              child: Text(
-                'Invite\nYour\nFriends',
-                style: TextStyle(
-                  fontWeight: FontWeight.bold,
+        // Add a dark overlay to make text more readable
+        child: Container(
+          decoration: BoxDecoration(
+            color:
+                Colors.black.withOpacity(0.3), // Add a semi-transparent overlay
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Padding(
+                padding: EdgeInsets.all(16.0),
+                child: Text(
+                  'Invite\nYour\nFriends',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color:
+                        Colors.white, // Change text color for better visibility
+                    fontSize: 18,
+                  ),
                 ),
               ),
-            ),
-            Container(
-              margin: const EdgeInsets.all(16.0),
-              padding: const EdgeInsets.symmetric(
-                horizontal: 12,
-                vertical: 6,
-              ),
-              decoration: BoxDecoration(
-                color: Colors.black,
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: const Text(
-                'Earn points',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w500,
+              Container(
+                margin: const EdgeInsets.all(16.0),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 6,
+                ),
+                decoration: BoxDecoration(
+                  color: Colors.black,
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: const Text(
+                  'Earn points',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w500,
+                  ),
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -245,10 +261,10 @@ class _HomePageState extends State<HomePage> {
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
       sliver: SliverGrid(
         gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-          crossAxisCount: 2,
-          childAspectRatio: 0.75,
-          crossAxisSpacing: 16,
-          mainAxisSpacing: 16,
+          crossAxisCount: 3,
+          childAspectRatio: 0.62,
+          crossAxisSpacing: 10,
+          mainAxisSpacing: 10,
         ),
         delegate: SliverChildBuilderDelegate(
           (context, index) => _buildItemCard(filteredItems[index]),
@@ -315,30 +331,30 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  Widget _buildBottomNavigation() {
-    return Positioned(
-      left: 16,
-      right: 16,
-      bottom: 16,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-        decoration: BoxDecoration(
-          color: Colors.black,
-          borderRadius: BorderRadius.circular(32),
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            _buildNavItem(Icons.home, true),
-            _buildNavItem(Icons.shopping_bag_outlined, false),
-            _buildNavItem(Icons.add_circle_outline, false),
-            _buildNavItem(Icons.chat_bubble_outline, false),
-            _buildNavItem(Icons.person_outline, false),
-          ],
-        ),
-      ),
-    );
-  }
+  // Widget _buildBottomNavigation() {
+  //   return Positioned(
+  //     left: 16,
+  //     right: 16,
+  //     bottom: 16,
+  //     child: Container(
+  //       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+  //       decoration: BoxDecoration(
+  //         color: Colors.black,
+  //         borderRadius: BorderRadius.circular(32),
+  //       ),
+  //       child: Row(
+  //         mainAxisAlignment: MainAxisAlignment.spaceBetween,
+  //         children: [
+  //           _buildNavItem(Icons.home, true),
+  //           _buildNavItem(Icons.shopping_bag_outlined, false),
+  //           _buildNavItem(Icons.add_circle_outline, false),
+  //           _buildNavItem(Icons.chat_bubble_outline, false),
+  //           _buildNavItem(Icons.person_outline, false),
+  //         ],
+  //       ),
+  //     ),
+  //   );
+  // }
 
   Widget _buildNavItem(IconData icon, bool isSelected) {
     return Icon(
