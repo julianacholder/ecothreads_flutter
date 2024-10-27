@@ -30,34 +30,29 @@ class _HomePageState extends State<HomePage> {
     return Scaffold(
       backgroundColor: Colors.white,
       body: SafeArea(
-        child: Stack(
-          children: [
-            CustomScrollView(
-              slivers: [
-                SliverToBoxAdapter(
-                  child: Padding(
-                    padding: const EdgeInsets.all(16.0),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        _buildHeader(),
-                        const SizedBox(height: 20),
-                        _buildSearchBar(),
-                        const SizedBox(height: 20),
-                        _buildBanner(),
-                        const SizedBox(height: 20),
-                        _buildCategories(),
-                      ],
-                    ),
-                  ),
+        child: CustomScrollView(
+          slivers: [
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _buildHeader(),
+                    const SizedBox(height: 20),
+                    _buildSearchBar(),
+                    const SizedBox(height: 20),
+                    _buildBanner(),
+                    const SizedBox(height: 20),
+                    _buildCategories(),
+                  ],
                 ),
-                _buildItemsGrid(),
-                const SliverToBoxAdapter(
-                  child: SizedBox(height: 80),
-                ),
-              ],
+              ),
             ),
-            _buildBottomNavigation(),
+            _buildItemsGrid(),
+            const SliverToBoxAdapter(
+              child: SizedBox(height: 80),
+            ),
           ],
         ),
       ),
@@ -333,38 +328,6 @@ class _HomePageState extends State<HomePage> {
           ),
         ),
       ],
-    );
-  }
-
-  Widget _buildBottomNavigation() {
-    return Positioned(
-      left: 16,
-      right: 16,
-      bottom: 16,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-        decoration: BoxDecoration(
-          color: Colors.black,
-          borderRadius: BorderRadius.circular(32),
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            _buildNavItem(Icons.home, true),
-            _buildNavItem(Icons.shopping_bag_outlined, false),
-            _buildNavItem(Icons.add_circle_outline, false),
-            _buildNavItem(Icons.chat_bubble_outline, false),
-            _buildNavItem(Icons.person_outline, false),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildNavItem(IconData icon, bool isSelected) {
-    return Icon(
-      icon,
-      color: isSelected ? Colors.white : Colors.white.withOpacity(0.5),
     );
   }
 
