@@ -3,6 +3,7 @@ import 'package:ecothreads/pages/donate_page.dart';
 import 'package:ecothreads/pages/home_page.dart';
 import 'package:ecothreads/pages/loading_page.dart';
 import 'package:ecothreads/pages/login_page.dart';
+import 'package:ecothreads/pages/onboarding_page.dart';
 import 'package:ecothreads/pages/usermessages.dart';
 import 'package:ecothreads/pages/userprofile_page.dart';
 import 'package:flutter/material.dart';
@@ -21,7 +22,7 @@ class MyApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       title: 'EcoThreads',
       theme: ThemeData(primaryColor: AppColors.primary),
-      home: const MainScreen(), // Start with MainScreen
+      home: const OnboardingPage(), // Start with MainScreen
       routes: {
         '/login': (context) => const LoginPage(),
         '/loading': (context) => const LoadingPage(),
