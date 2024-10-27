@@ -145,6 +145,7 @@ class _MainScreenState extends State<MainScreen> {
                     ),
                   ),
                 const SizedBox(height: 2.0),
+                const SizedBox(height: 2.0),
               ],
             ),
           ),
