@@ -40,7 +40,7 @@ class HomePage extends StatelessWidget {
                                 const SizedBox(height: 4),
                                 Text(
                                   'Crystal Holder',
-                                  style: GoogleFonts.inter(
+                                  style: TextStyle(
                                     fontSize: 24,
                                     fontWeight: FontWeight.bold,
                                   ),

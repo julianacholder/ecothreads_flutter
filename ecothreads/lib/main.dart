@@ -34,7 +34,7 @@ class MyApp extends StatelessWidget {
         '/donate': (context) => const DonatePage(),
         '/usermessages': (context) => const UserMessages(),
         '/userprofile': (context) => const UserProfile(),
-        '/checkout': (context) => const CheckoutPage(),
+        '/checkout': (context) => CheckoutPage(),
       },
     );
   }
@@ -50,7 +50,7 @@ class MainScreen extends StatefulWidget {
 class _MainScreenState extends State<MainScreen> {
   int _selectedIndex = 0;
 
-  final List<Widget> _pages = const [
+  final List<Widget> _pages = [
     HomePage(),
     CheckoutPage(),
     DonatePage(),
@@ -68,8 +68,7 @@ class _MainScreenState extends State<MainScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       body: _pages[_selectedIndex],
-      extendBody:
-          true, // Add this to make the body extend behind the navigation bar
+      extendBody: true,
       bottomNavigationBar: Container(
         margin: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 10.0),
         child: ClipRRect(
@@ -82,7 +81,7 @@ class _MainScreenState extends State<MainScreen> {
             type: BottomNavigationBarType.fixed,
             items: <BottomNavigationBarItem>[
               BottomNavigationBarItem(
-                icon: _buildIcon(Icons.home_filled, _selectedIndex == 0),
+                icon: _buildIcon(Icons.home, _selectedIndex == 0),
                 label: '',
               ),
               BottomNavigationBarItem(
