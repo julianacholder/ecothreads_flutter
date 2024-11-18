@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "688046774938",
+    "project_id": "ecothreads-b1d6e",
+    "storage_bucket": "ecothreads-b1d6e.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:688046774938:android:51d354f0ff844ca47e1d23",
+        "android_client_info": {
+          "package_name": "com.example.ecothreads"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAjepU9RjNNB_aUKrEOvgHI-OOhuVz5MYI"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

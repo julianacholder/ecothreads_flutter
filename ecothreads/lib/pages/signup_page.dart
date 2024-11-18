@@ -1,3 +1,6 @@
+import 'package:firebase_auth/firebase_auth.dart';
+import '../auth.dart';
+import 'auth_service.dart';
 import 'package:flutter/material.dart';
 
 class SignUpPage extends StatefulWidget {
@@ -8,7 +11,69 @@ class SignUpPage extends StatefulWidget {
 }
 
 class _SignUpPageState extends State<SignUpPage> {
+  String? errorMessage = '';
   bool _obscurePassword = true;
+
+  final TextEditingController _controllerEmail = TextEditingController();
+  final TextEditingController _controllerPassword = TextEditingController();
+  final AuthService _authService = AuthService();
+
+  bool isValidEmail(String email) {
+    return RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(email);
+  }
+
+  Future<void> _register() async {
+    String email = _controllerEmail.text.trim();
+    final password = _controllerPassword.text;
+
+    if (!isValidEmail(email)) {
+      setState(() {
+        errorMessage = 'Invalid email address';
+      });
+      return;
+    }
+
+    if (password.isEmpty) {
+      setState(() {
+        errorMessage = 'Password cannot be empty';
+      });
+      return;
+    }
+
+    if (password.length < 6) {
+      // Firebase requires at least 6 characters
+      setState(() {
+        errorMessage = 'Password must be at least 6 characters';
+      });
+      return;
+    }
+    try {
+      User? user = await _authService.registerWithEmailPassword(
+        _controllerEmail.text,
+        _controllerPassword.text,
+      );
+      if (user != null) {
+        Navigator.pushNamedAndRemoveUntil(
+          context,
+          '/main',
+          (route) => false,
+          arguments: 4,
+        );
+      } else {
+        setState(() {
+          errorMessage = 'Registration failed. Please try again.';
+        });
+      }
+    } on FirebaseAuthException catch (e) {
+      setState(() {
+        errorMessage = e.message;
+      });
+    }
+  }
+
+  Widget _errorMessage() {
+    return Text(errorMessage == '' ? '' : 'Hmm ? $errorMessage');
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -84,6 +149,8 @@ class _SignUpPageState extends State<SignUpPage> {
 
               // Email Field
               TextField(
+                controller: _controllerEmail,
+                keyboardType: TextInputType.emailAddress,
                 decoration: InputDecoration(
                   labelText: 'Email',
                   hintText: 'Enter your email address',
@@ -101,6 +168,7 @@ class _SignUpPageState extends State<SignUpPage> {
 
               // Password Field
               TextField(
+                controller: _controllerPassword,
                 obscureText: _obscurePassword,
                 decoration: InputDecoration(
                   labelText: 'Password',
@@ -166,14 +234,7 @@ class _SignUpPageState extends State<SignUpPage> {
 
               // Create Account Button
               ElevatedButton(
-                onPressed: () {
-                  Navigator.pushNamedAndRemoveUntil(
-                    context,
-                    '/main',
-                    (route) => false,
-                    arguments: 4,
-                  );
-                },
+                onPressed: _register,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.grey[300],
                   foregroundColor: Colors.black87,

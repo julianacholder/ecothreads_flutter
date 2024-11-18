@@ -1,4 +1,7 @@
+import 'package:ecothreads/auth.dart';
+import 'package:ecothreads/auth_service.dart';
 import 'package:ecothreads/pages/signup_page.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
 // Login Page
@@ -10,7 +13,56 @@ class LoginPage extends StatefulWidget {
 }
 
 class _LoginPageState extends State<LoginPage> {
+  String? errorMessage = '';
+  bool isLogin = true;
   bool _obscurePassword = true;
+
+  final TextEditingController _controllerEmail = TextEditingController();
+  final TextEditingController _controllerPassword = TextEditingController();
+  final AuthService _authService = AuthService();
+
+  bool _isValidEmail(String email) {
+    return RegExp(r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$')
+        .hasMatch(email);
+  }
+
+  Future<void> login(String email, String password) async {
+    String email = _controllerEmail.text.trim();
+    String password = _controllerPassword.text;
+
+    if (!_isValidEmail(email)) {
+      setState(() {
+        errorMessage = 'Invalid email address';
+      });
+      return;
+    }
+
+    if (password.isEmpty) {
+      setState(() {
+        errorMessage = 'Password cannot be empty';
+      });
+      return;
+    }
+    try {
+      User? user = await _authService.signInWithEmailPassword(email, password);
+      if (user != null) {
+        Navigator.pushNamedAndRemoveUntil(
+          context,
+          '/main',
+          (route) => false,
+          arguments: 4,
+        );
+      }
+    } on FirebaseAuthException catch (e) {
+      setState(() {
+        errorMessage = e.message;
+      });
+    }
+  }
+
+  Widget _errorMessage() {
+    return Text(errorMessage == '' ? '' : 'Hmm ? $errorMessage');
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -111,6 +163,15 @@ class _LoginPageState extends State<LoginPage> {
                 ),
               ),
               const SizedBox(height: 12),
+
+              if (errorMessage != null && errorMessage!.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 16),
+                  child: Text(
+                    errorMessage!,
+                    style: const TextStyle(color: Colors.red),
+                  ),
+                ),
 
               // Forgot Password
               Row(

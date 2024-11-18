@@ -12,8 +12,23 @@ import 'package:ecothreads/pages/userprofile_page.dart';
 import 'package:ecothreads/pages/onboarding_page.dart';
 import 'constants/colors.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:ecothreads/widget_tree.dart';
+import 'auth_service.dart';
 
-void main() {
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await Firebase.initializeApp(
+      options: FirebaseOptions(
+    apiKey: 'AIzaSyAuWA5wOuYtgUj7oAl0uBc5ziCDqy3zwhc',
+    appId: '1:688046774938:android:51d354f0ff844ca47e1d23',
+    messagingSenderId: '688046774938',
+    projectId: 'ecothreads-b1d6e',
+    storageBucket: 'ecothreads-b1d6e.appspot.com',
+    authDomain: 'ecothreads-b1d6e.firebaseapp.com',
+    measurementId: 'G-PFVCYKNXBD',
+  ));
   runApp(const MyApp());
 }
 
@@ -174,76 +189,3 @@ class _MainScreenState extends State<MainScreen> {
     );
   }
 }
-
-//   @override
-//   Widget build(BuildContext context) {
-//     return Scaffold(
-//       body: _pages[_selectedIndex],
-//       bottomNavigationBar: Padding(
-//         padding: const EdgeInsets.all(20),
-//         child: Container(
-//           decoration: BoxDecoration(
-//             color: AppColors.primarylight,
-//             borderRadius: BorderRadius.circular(30),
-//             boxShadow: [
-//               BoxShadow(
-//                 color: Colors.grey.withOpacity(0.3),
-//                 spreadRadius: 2,
-//                 blurRadius: 10,
-//                 offset: const Offset(0, 3),
-//               ),
-//             ],
-//           ),
-//           child: Padding(
-//             padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 8),
-//             child: Row(
-//               mainAxisAlignment: MainAxisAlignment.spaceAround,
-//               children: [
-//                 _buildNavItem(Icons.home_filled, 0),
-//                 _buildNavItem(Icons.shopping_bag_outlined, 1),
-//                 _buildNavItem(Icons.add, 2),
-//                 _buildNavItem(Icons.message_outlined, 3),
-//                 _buildNavItem(Icons.person_outlined, 4),
-//               ],
-//             ),
-//           ),
-//         ),
-//       ),
-//     );
-//   }
-
-//   Widget _buildNavItem(IconData icon, int index) {
-//     bool isSelected = _selectedIndex == index;
-
-//     return Material(
-//       color: Colors.transparent,
-//       child: InkWell(
-//         onTap: () => _onItemTapped(index),
-//         customBorder: const CircleBorder(),
-//         child: AnimatedContainer(
-//           duration: const Duration(milliseconds: 200),
-//           padding: const EdgeInsets.all(12),
-//           decoration: BoxDecoration(
-//             color: isSelected ? AppColors.primary : Colors.white,
-//             shape: BoxShape.circle,
-//             boxShadow: [
-//               BoxShadow(
-//                 color: isSelected
-//                     ? AppColors.primary.withOpacity(0.3)
-//                     : Colors.grey.withOpacity(0.1),
-//                 spreadRadius: isSelected ? 2 : 1,
-//                 blurRadius: isSelected ? 4 : 2,
-//                 offset: isSelected ? const Offset(0, 2) : const Offset(0, 1),
-//               ),
-//             ],
-//           ),
-//           child: Icon(
-//             icon,
-//             color: isSelected ? Colors.white : Colors.grey,
-//             size: 24,
-//           ),
-//         ),
-//       ),
-//     );
-//   }
-// }
