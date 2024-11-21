@@ -12,8 +12,11 @@ import 'package:ecothreads/pages/userprofile_page.dart';
 import 'package:ecothreads/pages/onboarding_page.dart';
 import 'constants/colors.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:firebase_core/firebase_core.dart';
 
-void main() {
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await Firebase.initializeApp();
   runApp(const MyApp());
 }
 
@@ -32,7 +35,6 @@ class MyApp extends StatelessWidget {
       ),
       home: const LoadingPage(),
       onGenerateRoute: (settings) {
-        // Handle navigation with arguments
         if (settings.name == '/main') {
           final int? tabIndex = settings.arguments as int?;
           return MaterialPageRoute(

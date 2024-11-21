@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart'; // Importing intl package for date formatting
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 void main() {
   runApp(Messagedonor());
@@ -25,56 +27,57 @@ class ChatScreen extends StatefulWidget {
 
 class _ChatScreenState extends State<ChatScreen> {
   final TextEditingController messageController = TextEditingController();
-  final List<Map<String, dynamic>> messages =
-      []; // Changed to dynamic to support voice messages
+
+  // Fetch messages as a real-time stream
+  Stream<List<Map<String, dynamic>>> fetchMessages(String chatId) {
+    return FirebaseFirestore.instance
+        .collection('chats')
+        .doc(chatId)
+        .collection('messages')
+        .orderBy('timestamp', descending: false)
+        .snapshots()
+        .map((snapshot) => snapshot.docs.map((doc) {
+              final data = doc.data();
+              return {
+                "text": data['text'],
+                "time": DateFormat('hh:mm a').format(data['timestamp'].toDate()),
+                "date": DateFormat('EEEE').format(data['timestamp'].toDate()),
+                "isSent": data['senderId'] ==
+                    FirebaseAuth.instance.currentUser!.uid,
+              };
+            }).toList());
+  }
+
+  // Send a message to Firestore
+  Future<void> sendMessage(String chatId, String text) async {
+    final userId = FirebaseAuth.instance.currentUser!.uid;
+    await FirebaseFirestore.instance
+        .collection('chats')
+        .doc(chatId)
+        .collection('messages')
+        .add({
+      'text': text,
+      'senderId': userId,
+      'timestamp': FieldValue.serverTimestamp(),
+    });
+  }
 
   void _sendMessage() {
     if (messageController.text.isNotEmpty) {
-      String messageText = messageController.text;
-      String messageDate = DateFormat('EEEE').format(DateTime.now());
-      String messageTime = DateFormat('hh:mm a').format(DateTime.now());
-
-      setState(() {
-        messages.add({
-          "text": messageText,
-          "date": messageDate,
-          "time": messageTime,
-          "isSent": true, // Mark the message as sent
-        });
-      });
+      final chatId = "user1_user2"; // Replace with dynamic chatId if needed
+      sendMessage(chatId, messageController.text);
       messageController.clear();
     }
   }
 
   void _sendVoiceNote() {
     // Placeholder for voice note functionality
-    String messageDate = DateFormat('EEEE').format(DateTime.now());
-    String messageTime = DateFormat('hh:mm a').format(DateTime.now());
-
-    setState(() {
-      messages.add({
-        "text": "Voice Note", // Placeholder text for the voice note
-        "date": messageDate,
-        "time": messageTime,
-        "isSent": true,
-      });
-    });
+    print("Voice note functionality triggered.");
   }
 
   void _uploadImage() {
-    // Handle image upload here
-    // This is a placeholder for image upload functionality
-    String messageDate = DateFormat('EEEE').format(DateTime.now());
-    String messageTime = DateFormat('hh:mm a').format(DateTime.now());
-
-    setState(() {
-      messages.add({
-        "text": "Image Uploaded", // Placeholder text for the image upload
-        "date": messageDate,
-        "time": messageTime,
-        "isSent": true,
-      });
-    });
+    // Placeholder for image upload functionality
+    print("Image upload functionality triggered.");
   }
 
   @override
@@ -96,98 +99,102 @@ class _ChatScreenState extends State<ChatScreen> {
             ),
           ),
         ),
-        title: Center(child: Text('Messages')), // Centered title
+        title: const Center(child: Text('Messages')), // Centered title
       ),
       body: Column(
         children: [
           // Top Separator Line
           Container(
-            height: 2, // Adjust height as needed
-            decoration: BoxDecoration(
+            height: 2,
+            decoration: const BoxDecoration(
               border: Border(
                 bottom: BorderSide(
                   color: Colors.grey,
                   width: 1,
-                  style: BorderStyle.solid,
                 ),
               ),
             ),
           ),
-          SizedBox(height: 5), // Add some spacing below the AppBar
+          const SizedBox(height: 5), // Spacing below the AppBar
+
+          // Chat Messages Section
           Expanded(
-            child: ListView.builder(
-              itemCount: messages.length,
-              itemBuilder: (context, index) {
-                final message = messages[index];
-                bool isSent = message["isSent"];
-
-                // Check if it's the first message of the day or from a new sender
-                bool showDate = false;
-                if (index == 0 ||
-                    message["date"] != messages[index - 1]["date"] ||
-                    messages[index - 1]["isSent"] != isSent) {
-                  showDate = true;
+            child: StreamBuilder<List<Map<String, dynamic>>>(
+              stream: fetchMessages('user1_user2'), // user
+              builder: (context, snapshot) {
+                if (!snapshot.hasData) {
+                  return const Center(child: CircularProgressIndicator());
                 }
+                final messages = snapshot.data!;
+                return ListView.builder(
+                  itemCount: messages.length,
+                  itemBuilder: (context, index) {
+                    final message = messages[index];
+                    final bool isSent = message["isSent"];
 
-                return Padding(
-                  padding: const EdgeInsets.symmetric(
-                      vertical: 4.0, horizontal: 8.0),
-                  child: Column(
-                    crossAxisAlignment: isSent
-                        ? CrossAxisAlignment.end
-                        : CrossAxisAlignment.start,
-                    children: [
-                      if (showDate)
-                        Center(
-                          child: Text(
-                            message["date"]!,
-                            style: TextStyle(fontSize: 12, color: Colors.grey),
+                    // Check if it's the first message of the day or from a new sender
+                    final bool showDate = index == 0 ||
+                        message["date"] != messages[index - 1]["date"];
+
+                    return Padding(
+                      padding: const EdgeInsets.symmetric(
+                          vertical: 4.0, horizontal: 8.0),
+                      child: Column(
+                        crossAxisAlignment: isSent
+                            ? CrossAxisAlignment.end
+                            : CrossAxisAlignment.start,
+                        children: [
+                          if (showDate)
+                            Center(
+                              child: Text(
+                                message["date"]!,
+                                style: const TextStyle(
+                                    fontSize: 12, color: Colors.grey),
+                              ),
+                            ),
+                          Container(
+                            margin: const EdgeInsets.only(top: 4.0),
+                            padding: const EdgeInsets.all(10.0),
+                            decoration: BoxDecoration(
+                              color: isSent ? Colors.black : Colors.grey[300],
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  message["text"]!,
+                                  style: TextStyle(
+                                    fontSize: 16,
+                                    color: isSent
+                                        ? Colors.white
+                                        : Colors.black,
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  message["time"]!,
+                                  style: const TextStyle(
+                                      fontSize: 10, color: Colors.grey),
+                                ),
+                              ],
+                            ),
                           ),
-                        ),
-                      Container(
-                        margin: EdgeInsets.only(top: 4.0),
-                        padding: EdgeInsets.all(10.0),
-                        decoration: BoxDecoration(
-                          color: isSent
-                              ? Colors.black
-                              : Colors.grey[
-                                  300], // Change color to black for sent messages
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              message["text"]!,
-                              style: TextStyle(
-                                  fontSize: 16,
-                                  color: isSent
-                                      ? Colors.white
-                                      : Colors
-                                          .black), // Change text color to white for readability
-                            ),
-                            SizedBox(height: 4),
-                            // Display the time below the message text
-                            Text(
-                              message["time"]!,
-                              style:
-                                  TextStyle(fontSize: 10, color: Colors.grey),
-                            ),
-                          ],
-                        ),
+                        ],
                       ),
-                    ],
-                  ),
+                    );
+                  },
                 );
               },
             ),
           ),
-          SizedBox(height: 5), // Add some spacing above the input field
+
+          // Chat Input Field
           ChatInputField(
             messageController: messageController,
             onSend: _sendMessage,
-            onVoice: _sendVoiceNote, // Pass the voice note function
-            onUpload: _uploadImage, // Pass the upload function
+            onVoice: _sendVoiceNote,
+            onUpload: _uploadImage,
           ),
         ],
       ),
@@ -198,8 +205,8 @@ class _ChatScreenState extends State<ChatScreen> {
 class ChatInputField extends StatelessWidget {
   final TextEditingController messageController;
   final VoidCallback onSend;
-  final VoidCallback onVoice; // Add a callback for voice notes
-  final VoidCallback onUpload; // Add a callback for upload images
+  final VoidCallback onVoice; // Callback for voice notes
+  final VoidCallback onUpload; // Callback for image upload
 
   ChatInputField({
     required this.messageController,
@@ -211,10 +218,10 @@ class ChatInputField extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 25.0, vertical: 8.0),
+      padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
       child: Row(
         children: [
-          // TextField for message input
+          // Text Field for Message Input
           Expanded(
             child: TextField(
               controller: messageController,
@@ -228,29 +235,19 @@ class ChatInputField extends StatelessWidget {
               ),
             ),
           ),
-          // Voice Note Icon
+          // Voice Note Button
           IconButton(
-            icon: Icon(Icons.mic),
-            onPressed: onVoice, // Call the voice note function
+            icon: const Icon(Icons.mic),
+            onPressed: onVoice,
           ),
-          // Popup Menu for Image Upload
-          PopupMenuButton(
-            icon: Icon(Icons.image),
-            itemBuilder: (BuildContext context) => [
-              PopupMenuItem(
-                child: Text("Upload Image"),
-                value: "upload",
-              ),
-            ],
-            onSelected: (value) {
-              if (value == "upload") {
-                onUpload(); // Call the upload function
-              }
-            },
+          // Image Upload Button
+          IconButton(
+            icon: const Icon(Icons.image),
+            onPressed: onUpload,
           ),
           // Send Button
           IconButton(
-            icon: Icon(Icons.send),
+            icon: const Icon(Icons.send),
             onPressed: onSend,
           ),
         ],
