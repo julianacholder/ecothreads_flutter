@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:ecothreads/pages/conservation_impact.dart'; // Import Conservation Impact Page
 import 'itemdetail.dart'; // Import the ProductPage here
 
 class HomePage extends StatefulWidget {
@@ -50,6 +51,9 @@ class _HomePageState extends State<HomePage> {
                           _buildBanner(),
                           const SizedBox(height: 20),
                           _buildCategories(),
+                          // Add Conservation Impact Button
+                          const SizedBox(height: 20),
+                          _buildConservationImpactButton(),
                         ],
                       ),
                     ),
@@ -253,6 +257,32 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
+  // Conservation Impact Button
+  Widget _buildConservationImpactButton() {
+    return ElevatedButton(
+      onPressed: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (context) => const ConservationImpact()),
+        );
+      },
+      style: ElevatedButton.styleFrom(
+        padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 24),
+        primary: Colors.green,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+        ),
+      ),
+      child: const Text(
+        'Check Conservation Impact',
+        style: TextStyle(
+          color: Colors.white,
+          fontSize: 16,
+        ),
+      ),
+    );
+  }
+
   Widget _buildItemsGrid() {
     return SliverPadding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
@@ -316,70 +346,5 @@ class _HomePageState extends State<HomePage> {
                 ),
               ),
               const SizedBox(width: 4),
-              const Icon(Icons.star, color: Colors.amber, size: 12),
-              const Text(
-                ' 5.0',
-                style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-            ],
-          ),
-          Text(
-            '${item['points']}pts',
-            style: const TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+              const Icon(Icons.star, color: Colors
 
-  @override
-  void dispose() {
-    _searchController.dispose();
-    super.dispose();
-  }
-}
-
-final List<Map<String, dynamic>> itemsList = [
-  {
-    'name': 'Dress Skirt',
-    'points': 100,
-    'image': 'assets/images/dress.jpg',
-    'category': 'Jeans',
-  },
-  {
-    'name': 'Jeans Skirt',
-    'points': 100,
-    'image': 'assets/images/skirt.jpg',
-    'category': 'Jeans',
-  },
-  {
-    'name': 'Black Top',
-    'points': 100,
-    'image': 'assets/images/shirt.jpg',
-    'category': 'T-Shirt',
-  },
-  {
-    'name': 'Red Flower skirt',
-    'points': 100,
-    'image': 'assets/images/flower skirt.jpg',
-    'category': 'T-Shirt',
-  },
-  {
-    'name': 'Grey nike shoes',
-    'points': 100,
-    'image': 'assets/images/grey.jpg',
-    'category': 'Dress',
-  },
-  {
-    'name': 'Ping Shoes',
-    'points': 100,
-    'image': 'assets/images/pink.jpg',
-    'category': 'Dress',
-  },
-];

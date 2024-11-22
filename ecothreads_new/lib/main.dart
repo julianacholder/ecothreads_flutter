@@ -1,5 +1,6 @@
 import 'package:ecothreads/pages/settings_page.dart';
 
+import 'conservation_impact.dart';
 import 'pages/editprofile_page.dart';
 import 'pages/messagedonor.dart';
 import 'package:flutter/material.dart';
@@ -67,6 +68,7 @@ class MyApp extends StatelessWidget {
         '/message': (context) => MessageDonor(),
         '/settings': (context) => SettingsPage(),
         '/checkout': (context) => CheckoutPage(),
+        '/conservation': (context) => ConservationImpact(),
       },
     );
   }
