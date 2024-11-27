@@ -1,4 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:firebase_storage/firebase_storage.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'dart:io';
 
 class DonatePage extends StatefulWidget {
   const DonatePage({super.key});
@@ -9,40 +14,195 @@ class DonatePage extends StatefulWidget {
 
 class _DonatePageState extends State<DonatePage> {
   String selectedCondition = 'New';
+  final ImagePicker _picker = ImagePicker();
+  File? _image;
+  bool _isLoading = false;
+  final _nameController = TextEditingController();
+  final _descriptionController = TextEditingController();
+  final user = FirebaseAuth.instance.currentUser;
+  final _firestore = FirebaseFirestore.instance;
+  final _storage = FirebaseStorage.instance;
 
-  // Show donation confirmation dialog
-  void _showDonationDialog() {
+  int get conditionPoints {
+    switch (selectedCondition) {
+      case 'New':
+        return 200;
+      case 'Slightly Used':
+        return 150;
+      case 'Well-Worn':
+        return 100;
+      default:
+        return 100;
+    }
+  }
+
+  Future<void> _pickImage(ImageSource source) async {
+    try {
+      final XFile? pickedFile = await _picker.pickImage(source: source);
+      if (pickedFile != null) {
+        setState(() {
+          _image = File(pickedFile.path);
+        });
+      }
+    } catch (e) {
+      print('Error picking image: $e');
+    }
+  }
+
+  Future<void> _submitDonation() async {
+    if (_image == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please select an image')),
+      );
+      return;
+    }
+
+    if (_nameController.text.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please enter item name')),
+      );
+      return;
+    }
+
+    setState(() => _isLoading = true);
+
+    try {
+      // Create storage instance with correct bucket
+      final storageInstance = FirebaseStorage.instanceFor(
+          bucket: 'ecothreads-b1d6e.firebasestorage.app');
+
+      // Create file reference in the images folder
+      final fileRef = storageInstance
+          .ref()
+          .child('images')
+          .child('donation_${DateTime.now().millisecondsSinceEpoch}.jpg');
+
+      print('Attempting to upload to: ${fileRef.fullPath}');
+
+      // Upload the file
+      final uploadTask = await fileRef.putFile(_image!);
+      print('Upload completed with state: ${uploadTask.state}');
+
+      if (uploadTask.state == TaskState.success) {
+        // Get the download URL
+        final imageUrl = await fileRef.getDownloadURL();
+        print('Got download URL: $imageUrl');
+
+        // Create donation document
+        DocumentReference donationRef =
+            await _firestore.collection('donations').add({
+          'userId': user!.uid,
+          'itemName': _nameController.text,
+          'description': _descriptionController.text,
+          'condition': selectedCondition,
+          'imageUrl': imageUrl,
+          'points': conditionPoints,
+          'createdAt': FieldValue.serverTimestamp(),
+        });
+
+        print('Created donation document');
+
+        // Add to clothing collection with markup
+        await _firestore.collection('clothing').add({
+          'itemName': _nameController.text,
+          'description': _descriptionController.text,
+          'condition': selectedCondition,
+          'imageUrl': imageUrl,
+          'points': conditionPoints + 150, // Markup for selling
+          'originalDonationId': donationRef.id,
+          'donorId': user!.uid,
+          'createdAt': FieldValue.serverTimestamp(),
+          'status': 'available'
+        });
+
+        print('Created clothing document');
+
+        // Update user's total points
+        DocumentSnapshot userDoc =
+            await _firestore.collection('users').doc(user!.uid).get();
+
+        if (userDoc.exists) {
+          Map<String, dynamic> userData =
+              userDoc.data() as Map<String, dynamic>;
+          int currentPoints = userData['points'] ?? 0;
+          await _firestore.collection('users').doc(user!.uid).update({
+            'points': currentPoints + conditionPoints,
+          });
+          print('Updated user points');
+        } else {
+          // If user document doesn't exist, create it with initial points
+          await _firestore.collection('users').doc(user!.uid).set({
+            'points': conditionPoints,
+            'createdAt': FieldValue.serverTimestamp(),
+          }, SetOptions(merge: true));
+          print('Created new user document with initial points');
+        }
+
+        // Show success dialog with earned points
+        if (mounted) {
+          _showDonationDialog(conditionPoints);
+          _clearForm();
+        }
+      } else {
+        throw Exception('Upload failed with state: ${uploadTask.state}');
+      }
+    } catch (e) {
+      print('Error submitting donation: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to submit donation: ${e.toString()}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
+  }
+
+  void _clearForm() {
+    setState(() {
+      _image = null;
+      _nameController.clear();
+      _descriptionController.clear();
+      selectedCondition = 'New';
+    });
+  }
+
+  void _showDonationDialog(int points) {
     showDialog(
       context: context,
       builder: (BuildContext context) {
         return AlertDialog(
           content: Padding(
-            padding: EdgeInsets.only(top: 20),
+            padding: const EdgeInsets.only(top: 20),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                Container(
-                  decoration: BoxDecoration(shape: BoxShape.circle),
-                  child: Icon(
-                    Icons.monetization_on_rounded,
-                    color: Color(0xFFFFD700),
-                    size: 25,
-                  ),
+                const Icon(
+                  Icons.monetization_on_rounded,
+                  color: Color(0xFFFFD700),
+                  size: 25,
                 ),
-                SizedBox(height: 8),
-                Text('Your items will help make a difference.'),
-                SizedBox(height: 16),
-                Text('Points earned: 100',
-                    style: TextStyle(fontWeight: FontWeight.bold)),
+                const SizedBox(height: 8),
+                const Text('Your items will help make a difference.'),
+                const SizedBox(height: 16),
+                Text(
+                  'Points earned: $points',
+                  style: const TextStyle(fontWeight: FontWeight.bold),
+                ),
               ],
             ),
           ),
           actions: [
             TextButton(
               onPressed: () {
-                Navigator.of(context).pop(); // Close the dialog
-                // Add any additional logic here (e.g., navigation, reset form)
+                Navigator.of(context).pop();
+                Navigator.pushReplacementNamed(context, '/main');
               },
               child: const Text('OK', style: TextStyle(color: Colors.black)),
             ),
@@ -78,21 +238,35 @@ class _DonatePageState extends State<DonatePage> {
                 style: TextStyle(fontSize: 18, color: Color(0xFF808080)),
               ),
               const SizedBox(height: 16),
-              const Center(
-                child: Icon(
-                  Icons.cloud_download,
-                  size: 100,
-                  color: Color(0xFFE2DFDF),
-                ),
+              Center(
+                child: _image != null
+                    ? Container(
+                        height: 200,
+                        width: double.infinity,
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(8),
+                          image: DecorationImage(
+                            image: FileImage(_image!),
+                            fit: BoxFit.cover,
+                          ),
+                        ),
+                      )
+                    : const Icon(
+                        Icons.cloud_download,
+                        size: 100,
+                        color: Color(0xFFE2DFDF),
+                      ),
               ),
               const SizedBox(height: 16),
               Center(
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    _buildDonateButtons('Capture'),
+                    _buildDonateButtons(
+                        'Capture', () => _pickImage(ImageSource.camera)),
                     const SizedBox(width: 35),
-                    _buildDonateButtons('Upload'),
+                    _buildDonateButtons(
+                        'Upload', () => _pickImage(ImageSource.gallery)),
                   ],
                 ),
               ),
@@ -127,6 +301,7 @@ class _DonatePageState extends State<DonatePage> {
                   ),
                   const SizedBox(height: 8),
                   TextField(
+                    controller: _nameController,
                     decoration: InputDecoration(
                       hintText: 'eg. Blue t-shirt',
                       hintStyle: TextStyle(
@@ -169,6 +344,7 @@ class _DonatePageState extends State<DonatePage> {
                   ),
                   const SizedBox(height: 8),
                   TextField(
+                    controller: _descriptionController,
                     maxLines: 4,
                     decoration: InputDecoration(
                       hintText: "eg. Bought from fashion nova but doesn't fit",
@@ -202,9 +378,9 @@ class _DonatePageState extends State<DonatePage> {
                 ],
               ),
               const SizedBox(height: 24),
-              const Text(
-                'Points Earned: 100',
-                style: TextStyle(
+              Text(
+                'Points Earned: $conditionPoints',
+                style: const TextStyle(
                   fontWeight: FontWeight.w600,
                   fontSize: 15,
                 ),
@@ -213,7 +389,7 @@ class _DonatePageState extends State<DonatePage> {
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
-                  onPressed: _showDonationDialog, // Added dialog trigger here
+                  onPressed: _isLoading ? null : _submitDonation,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.black,
                     padding: const EdgeInsets.symmetric(vertical: 16),
@@ -221,14 +397,24 @@ class _DonatePageState extends State<DonatePage> {
                       borderRadius: BorderRadius.circular(8),
                     ),
                   ),
-                  child: const Text(
-                    'Submit Donation',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
+                  child: _isLoading
+                      ? const SizedBox(
+                          height: 20,
+                          width: 20,
+                          child: CircularProgressIndicator(
+                            valueColor:
+                                AlwaysStoppedAnimation<Color>(Colors.white),
+                            strokeWidth: 2,
+                          ),
+                        )
+                      : const Text(
+                          'Submit Donation',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
                 ),
               ),
             ],
@@ -238,9 +424,9 @@ class _DonatePageState extends State<DonatePage> {
     );
   }
 
-  Widget _buildDonateButtons(String text) {
+  Widget _buildDonateButtons(String text, VoidCallback onPressed) {
     return ElevatedButton(
-      onPressed: () {},
+      onPressed: onPressed,
       style: ElevatedButton.styleFrom(
         padding: const EdgeInsets.symmetric(horizontal: 40),
         backgroundColor: Colors.black,

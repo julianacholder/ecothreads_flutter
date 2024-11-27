@@ -19,7 +19,8 @@ class _UserProfileState extends State<UserProfile> {
   final user = FirebaseAuth.instance.currentUser;
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseStorage _storage = FirebaseStorage.instance;
-  final ImagePicker _imagePicker = ImagePicker();
+  final ImagePicker _picker = ImagePicker();
+
   bool _isLoading = false;
 
   Future<Map<String, dynamic>> getUserData() async {
@@ -32,11 +33,9 @@ class _UserProfileState extends State<UserProfile> {
             .where('userId', isEqualTo: user!.uid)
             .get();
 
-        // Change the total points calculation to handle both int and double
         int totalPoints = 0;
         for (var doc in donationsSnapshot.docs) {
           var points = (doc.data() as Map<String, dynamic>)['points'] ?? 0;
-          // Convert to int if it's a double
           if (points is double) {
             totalPoints += points.toInt();
           } else if (points is int) {
@@ -57,63 +56,383 @@ class _UserProfileState extends State<UserProfile> {
     return {};
   }
 
+  void _showStatusUpdateDialog(String listingId, String currentStatus) {
+    print('Opening dialog for listing ID: $listingId');
+    final List<String> statusOptions = ['Available', 'Pending', 'Sold'];
+
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return Dialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text(
+                  'Update Status',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 20),
+                ...statusOptions
+                    .map((status) => ListTile(
+                          title: Text(status),
+                          trailing: currentStatus.toLowerCase() ==
+                                  status.toLowerCase()
+                              ? const Icon(Icons.check_circle,
+                                  color: Colors.green)
+                              : null,
+                          onTap: () async {
+                            try {
+                              print('Updating status for document: $listingId');
+
+                              // Get reference to the donation document
+                              final donationRef = _firestore
+                                  .collection('donations')
+                                  .doc(listingId);
+
+                              // Update the donation status
+                              await donationRef.update({
+                                'status': status.toLowerCase(),
+                                'lastUpdated': FieldValue.serverTimestamp(),
+                              });
+
+                              // Get the clothing document with matching originalDonationId
+                              final clothingQuery = await _firestore
+                                  .collection('clothing')
+                                  .where('originalDonationId',
+                                      isEqualTo: listingId)
+                                  .get();
+
+                              // Update the clothing status if found
+                              if (clothingQuery.docs.isNotEmpty) {
+                                await clothingQuery.docs.first.reference
+                                    .update({
+                                  'status': status.toLowerCase(),
+                                  'lastUpdated': FieldValue.serverTimestamp(),
+                                });
+                              }
+
+                              if (mounted) {
+                                Navigator.of(context).pop();
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text('Status updated to $status'),
+                                    backgroundColor: Colors.green,
+                                  ),
+                                );
+                                setState(() {}); // Refresh the UI
+                              }
+                            } catch (e) {
+                              print('Error updating status: $e');
+                              if (mounted) {
+                                Navigator.of(context).pop();
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content:
+                                        Text('Failed to update status: $e'),
+                                    backgroundColor: Colors.red,
+                                  ),
+                                );
+                              }
+                            }
+                          },
+                        ))
+                    .toList(),
+                const SizedBox(height: 10),
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: const Text('Cancel'),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   Future<void> _uploadCoverImage() async {
     try {
       setState(() => _isLoading = true);
 
-      final XFile? image =
-          await _imagePicker.pickImage(source: ImageSource.gallery);
-      if (image == null) return;
+      final currentUser = FirebaseAuth.instance.currentUser;
+      if (currentUser == null) {
+        throw Exception('No authenticated user found');
+      }
 
-      File imageFile = File(image.path);
-      String fileName =
-          'cover_${user!.uid}_${DateTime.now().millisecondsSinceEpoch}';
-      Reference storageRef = _storage.ref().child('cover_images/$fileName');
-
-      await storageRef.putFile(imageFile);
-      String downloadURL = await storageRef.getDownloadURL();
-
-      await _firestore.collection('users').doc(user!.uid).update({
-        'coverImageUrl': downloadURL,
-      });
-
-      setState(() => _isLoading = false);
-    } catch (e) {
-      print('Error uploading cover image: $e');
-      setState(() => _isLoading = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Failed to upload cover image')),
+      final XFile? pickedFile = await _picker.pickImage(
+        source: ImageSource.gallery,
+        imageQuality: 85,
       );
+
+      if (pickedFile == null) {
+        print('No image selected');
+        return;
+      }
+
+      final File imageFile = File(pickedFile.path);
+
+      final storageInstance = FirebaseStorage.instanceFor(
+          bucket: 'ecothreads-b1d6e.firebasestorage.app');
+
+      final fileRef = storageInstance
+          .ref()
+          .child('images')
+          .child('cover_${DateTime.now().millisecondsSinceEpoch}.jpg');
+
+      print('Attempting upload to: ${fileRef.fullPath}');
+
+      final uploadTask = await fileRef.putFile(imageFile);
+      print('Upload completed with state: ${uploadTask.state}');
+
+      if (uploadTask.state == TaskState.success) {
+        final downloadUrl = await fileRef.getDownloadURL();
+        print('Got download URL: $downloadUrl');
+
+        await FirebaseFirestore.instance
+            .collection('users')
+            .doc(currentUser.uid)
+            .set({
+          'coverImageUrl': downloadUrl,
+          'lastUpdated': FieldValue.serverTimestamp(),
+        }, SetOptions(merge: true));
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Cover image uploaded successfully'),
+              backgroundColor: Colors.green,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      print('Upload error: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Upload failed: ${e.toString()}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
     }
   }
 
-  Future<void> _uploadProfileImage() async {
-    try {
-      setState(() => _isLoading = true);
+  Widget _buildListingItem(Map<String, dynamic> listing) {
+    return Container(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(16),
+        color: Colors.white,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.grey.withOpacity(0.2),
+            spreadRadius: 1,
+            blurRadius: 4,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Expanded(
+            child: Stack(
+              children: [
+                Container(
+                  decoration: BoxDecoration(
+                    borderRadius: const BorderRadius.only(
+                      topLeft: Radius.circular(16),
+                      topRight: Radius.circular(16),
+                    ),
+                    image: DecorationImage(
+                      image: NetworkImage(listing['imageUrl'] ?? ''),
+                      fit: BoxFit.cover,
+                      onError: (exception, stackTrace) {},
+                    ),
+                  ),
+                ),
+                if (listing['status'] != null)
+                  Positioned(
+                    top: 8,
+                    right: 8,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 4,
+                      ),
+                      decoration: BoxDecoration(
+                        color: _getStatusColor(listing['status']),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Text(
+                        listing['status'],
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.all(8.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  listing['itemName'] ?? 'Unnamed Item',
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 13,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 4),
+                Row(
+                  mainAxisSize: MainAxisSize.max,
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Expanded(
+                      child: Text(
+                        listing['condition'] ?? 'Unknown',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.grey[600],
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.star,
+                          color: Colors.amber[400],
+                          size: 14,
+                        ),
+                        const SizedBox(width: 2),
+                        Text(
+                          (listing['rating']?.toString() ?? '5.0'),
+                          style: const TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                Row(
+                  children: [
+                    const Icon(
+                      Icons.monetization_on,
+                      size: 14,
+                      color: Colors.green,
+                    ),
+                    const SizedBox(width: 2),
+                    Text(
+                      '${listing['points']?.toString() ?? '0'} pts',
+                      style: const TextStyle(
+                        color: Colors.black,
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 
-      final XFile? image =
-          await _imagePicker.pickImage(source: ImageSource.gallery);
-      if (image == null) return;
+  Widget _buildActionButton(String text) {
+    return Container(
+      width: 70,
+      height: 23,
+      decoration: BoxDecoration(
+        color: AppColors.primarylight,
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Center(
+        child: Text(
+          text,
+          style: const TextStyle(
+            color: Colors.white,
+            fontWeight: FontWeight.w500,
+            fontSize: 14,
+          ),
+        ),
+      ),
+    );
+  }
 
-      File imageFile = File(image.path);
-      String fileName =
-          'profile_${user!.uid}_${DateTime.now().millisecondsSinceEpoch}';
-      Reference storageRef = _storage.ref().child('profile_images/$fileName');
+  Widget _buildStatColumn(IconData icon, String value, String label) {
+    return Column(
+      children: [
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Icon(
+              icon,
+              size: 20,
+              color: Colors.black,
+            ),
+            const SizedBox(width: 4),
+            Text(
+              value,
+              style: const TextStyle(
+                fontWeight: FontWeight.w900,
+                fontSize: 16,
+                color: Colors.black,
+              ),
+            ),
+          ],
+        ),
+        Text(
+          label,
+          style: const TextStyle(
+            fontWeight: FontWeight.normal,
+            fontSize: 14,
+            color: Colors.black,
+          ),
+        ),
+      ],
+    );
+  }
 
-      await storageRef.putFile(imageFile);
-      String downloadURL = await storageRef.getDownloadURL();
-
-      await _firestore.collection('users').doc(user!.uid).update({
-        'profileImageUrl': downloadURL,
-      });
-
-      setState(() => _isLoading = false);
-    } catch (e) {
-      print('Error uploading profile image: $e');
-      setState(() => _isLoading = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Failed to upload profile image')),
-      );
+  Color _getStatusColor(String status) {
+    switch (status.toLowerCase()) {
+      case 'available':
+        return Colors.green;
+      case 'pending':
+        return Colors.orange;
+      case 'sold':
+        return Colors.red;
+      default:
+        return Colors.grey;
     }
   }
 
@@ -147,7 +466,7 @@ class _UserProfileState extends State<UserProfile> {
                         GestureDetector(
                           onTap: _isLoading ? null : _uploadCoverImage,
                           child: Container(
-                            height: 210,
+                            height: 230,
                             width: double.infinity,
                             decoration: BoxDecoration(
                               color: Colors.grey[300],
@@ -181,7 +500,7 @@ class _UserProfileState extends State<UserProfile> {
                           bottom: -45,
                           left: 20,
                           child: GestureDetector(
-                            onTap: _isLoading ? null : _uploadProfileImage,
+                            onTap: _isLoading ? null : _uploadCoverImage,
                             child: Container(
                               height: 105,
                               width: 105,
@@ -390,10 +709,20 @@ class _UserProfileState extends State<UserProfile> {
                                 ),
                                 itemCount: listingsSnapshot.data!.docs.length,
                                 itemBuilder: (context, index) {
+                                  final doc =
+                                      listingsSnapshot.data!.docs[index];
                                   final listing =
-                                      listingsSnapshot.data!.docs[index].data()
-                                          as Map<String, dynamic>;
-                                  return _buildListingItem(listing);
+                                      doc.data() as Map<String, dynamic>;
+
+                                  return GestureDetector(
+                                    onTap: () {
+                                      print(
+                                          'Tapped listing with ID: ${doc.id}');
+                                      _showStatusUpdateDialog(doc.id,
+                                          listing['status'] ?? 'available');
+                                    },
+                                    child: _buildListingItem(listing),
+                                  );
                                 },
                               );
                             },
@@ -416,223 +745,5 @@ class _UserProfileState extends State<UserProfile> {
         ],
       ),
     );
-  }
-
-  Widget _buildActionButton(String text) {
-    return Container(
-      width: 70,
-      height: 23,
-      decoration: BoxDecoration(
-        color: AppColors.primarylight,
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Center(
-        child: Text(
-          text,
-          style: const TextStyle(
-            color: Colors.white,
-            fontWeight: FontWeight.w500,
-            fontSize: 14,
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildStatColumn(IconData icon, String value, String label) {
-    return Column(
-      children: [
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            Icon(
-              icon,
-              size: 20,
-              color: Colors.black,
-            ),
-            const SizedBox(width: 4),
-            Text(
-              value,
-              style: const TextStyle(
-                fontWeight: FontWeight.w900,
-                fontSize: 16,
-                color: Colors.black,
-              ),
-            ),
-          ],
-        ),
-        Text(
-          label,
-          style: const TextStyle(
-            fontWeight: FontWeight.normal,
-            fontSize: 14,
-            color: Colors.black,
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildListingItem(Map<String, dynamic> listing) {
-    return Container(
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(16),
-        color: Colors.white,
-        boxShadow: [
-          BoxShadow(
-            color: Colors.grey.withOpacity(0.2),
-            spreadRadius: 1,
-            blurRadius: 4,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          // Image Container
-          Expanded(
-            child: Stack(
-              children: [
-                // Main Image
-                Container(
-                  decoration: BoxDecoration(
-                    borderRadius: const BorderRadius.only(
-                      topLeft: Radius.circular(16),
-                      topRight: Radius.circular(16),
-                    ),
-                    image: DecorationImage(
-                      image: NetworkImage(listing['imageUrl'] ?? ''),
-                      fit: BoxFit.cover,
-                      onError: (exception, stackTrace) {},
-                    ),
-                  ),
-                ),
-                // Status Badge (if needed)
-                if (listing['status'] != null)
-                  Positioned(
-                    top: 8,
-                    right: 8,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 4,
-                      ),
-                      decoration: BoxDecoration(
-                        color: _getStatusColor(listing['status']),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Text(
-                        listing['status'],
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 10,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                  ),
-              ],
-            ),
-          ),
-
-          // Item Details Container
-          Padding(
-            padding: const EdgeInsets.all(8.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                // Item Name
-                Text(
-                  listing['name'] ?? 'Unnamed Item',
-                  style: const TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 13,
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                const SizedBox(height: 4),
-
-                // Condition and Rating Row
-                Row(
-                  mainAxisSize: MainAxisSize.max,
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    // Condition
-                    Expanded(
-                      child: Text(
-                        listing['condition'] ?? 'Unknown',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: Colors.grey[600],
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                    // Rating
-                    Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          Icons.star,
-                          color: Colors.amber[400],
-                          size: 14,
-                        ),
-                        const SizedBox(width: 2),
-                        Text(
-                          (listing['rating']?.toString() ?? '5.0'),
-                          style: const TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 4),
-
-                // Points
-                Row(
-                  children: [
-                    const Icon(
-                      Icons.monetization_on,
-                      size: 14,
-                      color: Colors.green,
-                    ),
-                    const SizedBox(width: 2),
-                    Text(
-                      '${listing['points']?.toString() ?? '0'} pts',
-                      style: const TextStyle(
-                        color: Colors.black,
-                        fontSize: 12,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Color _getStatusColor(String status) {
-    switch (status.toLowerCase()) {
-      case 'available':
-        return Colors.green;
-      case 'pending':
-        return Colors.orange;
-      case 'sold':
-        return Colors.red;
-      default:
-        return Colors.grey;
-    }
   }
 }
