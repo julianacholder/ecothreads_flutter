@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'itemdetail.dart'; // Import the ProductPage here
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'itemdetail.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({Key? key}) : super(key: key);
@@ -10,12 +12,99 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  final user = FirebaseAuth.instance.currentUser;
   String _searchQuery = '';
   String _selectedCategory = 'All Items';
   final TextEditingController _searchController = TextEditingController();
+  List<Map<String, dynamic>> _allItems = [];
+  bool _isLoading = true;
+  String _userFullName = '';
+  String? _userProfileImage;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadUserData();
+    _loadItems();
+  }
+
+  Future<void> _loadUserData() async {
+    if (user != null) {
+      try {
+        DocumentSnapshot userDoc =
+            await _firestore.collection('users').doc(user!.uid).get();
+
+        if (userDoc.exists) {
+          setState(() {
+            _userFullName = userDoc.get('fullName') ?? 'User';
+            _userProfileImage = userDoc.get('profileImageUrl');
+          });
+        }
+      } catch (e) {
+        print('Error loading user data: $e');
+      }
+    }
+  }
+
+  Future<void> _loadItems() async {
+    try {
+      setState(() => _isLoading = true);
+
+      // Fetch donations
+      final QuerySnapshot donationsSnapshot = await _firestore
+          .collection('donations')
+          .where('status', isEqualTo: 'available')
+          .get();
+
+      // Fetch clothing items
+      final QuerySnapshot clothingSnapshot =
+          await _firestore.collection('home_clothing').get();
+
+      List<Map<String, dynamic>> items = [];
+
+      // Add donations
+      for (var doc in donationsSnapshot.docs) {
+        final data = doc.data() as Map<String, dynamic>;
+        items.add({
+          'id': doc.id,
+          'name': data['itemName'] ?? 'Unnamed Item',
+          'points': data['points'] ?? 0,
+          'image': data['imageUrl'] ?? '',
+          'category': data['category'] ?? 'All Items',
+          'condition': data['condition'] ?? 'New',
+          'isManual': false,
+          'description': data['description'] ?? 'New Clothes'
+        });
+      }
+
+      // Add clothing items
+      for (var doc in clothingSnapshot.docs) {
+        final data = doc.data() as Map<String, dynamic>;
+        items.add({
+          'id': doc.id,
+          'name': data['itemName'] ?? 'Unnamed Item',
+          'points': data['points'] ?? 0,
+          'image': data['imageUrl'] ?? '',
+          'category': data['category'] ?? 'All Items',
+          'condition': data['condition'] ?? 'New',
+          'isManual': true,
+          'description': data['description'] ?? 'New Clothes'
+        });
+      }
+
+      setState(() {
+        _allItems = items;
+        _isLoading = false;
+      });
+    } catch (e) {
+      print('Error loading items: $e');
+      setState(() => _isLoading = false);
+    }
+  }
 
   List<Map<String, dynamic>> get filteredItems {
-    return itemsList.where((item) {
+    return _allItems.where((item) {
       final matchesSearch = item['name']
           .toString()
           .toLowerCase()
@@ -60,6 +149,10 @@ class _HomePageState extends State<HomePage> {
                   ),
                 ],
               ),
+              if (_isLoading)
+                const Center(
+                  child: CircularProgressIndicator(),
+                ),
             ],
           ),
         ),
@@ -88,7 +181,7 @@ class _HomePageState extends State<HomePage> {
             ),
             const SizedBox(height: 4),
             Text(
-              'Crystal Holder',
+              _userFullName.isNotEmpty ? _userFullName : 'Loading...',
               style: GoogleFonts.inter(
                 fontSize: 24,
                 fontWeight: FontWeight.bold,
@@ -96,9 +189,12 @@ class _HomePageState extends State<HomePage> {
             ),
           ],
         ),
-        const CircleAvatar(
+        CircleAvatar(
           radius: 25,
-          backgroundImage: AssetImage('assets/images/profile.png'),
+          backgroundColor: Colors.grey[300],
+          backgroundImage: _userProfileImage != null
+              ? NetworkImage(_userProfileImage!)
+              : const AssetImage('assets/images/profile.png') as ImageProvider,
         ),
       ],
     );
@@ -264,7 +360,19 @@ class _HomePageState extends State<HomePage> {
           mainAxisSpacing: 10,
         ),
         delegate: SliverChildBuilderDelegate(
-          (context, index) => _buildItemCard(filteredItems[index]),
+          (context, index) {
+            final item = filteredItems[index];
+            return GestureDetector(
+              onTap: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (context) => ProductPage(item: item),
+                  ),
+                );
+              },
+              child: _buildItemCard(item),
+            );
+          },
           childCount: filteredItems.length,
         ),
       ),
@@ -290,8 +398,11 @@ class _HomePageState extends State<HomePage> {
                 color: Colors.grey[200],
                 borderRadius: BorderRadius.circular(12),
                 image: DecorationImage(
-                  image: AssetImage(item['image']),
+                  image: NetworkImage(item['image']),
                   fit: BoxFit.cover,
+                  onError: (error, stackTrace) {
+                    print('Error loading image: $error');
+                  },
                 ),
               ),
             ),
@@ -309,7 +420,7 @@ class _HomePageState extends State<HomePage> {
           Row(
             children: [
               Text(
-                'New',
+                item['condition'],
                 style: TextStyle(
                   color: Colors.grey[600],
                   fontSize: 11,
@@ -344,42 +455,3 @@ class _HomePageState extends State<HomePage> {
     super.dispose();
   }
 }
-
-final List<Map<String, dynamic>> itemsList = [
-  {
-    'name': 'Dress Skirt',
-    'points': 100,
-    'image': 'assets/images/dress.jpg',
-    'category': 'Jeans',
-  },
-  {
-    'name': 'Jeans Skirt',
-    'points': 100,
-    'image': 'assets/images/skirt.jpg',
-    'category': 'Jeans',
-  },
-  {
-    'name': 'Black Top',
-    'points': 100,
-    'image': 'assets/images/shirt.jpg',
-    'category': 'T-Shirt',
-  },
-  {
-    'name': 'Red Flower skirt',
-    'points': 100,
-    'image': 'assets/images/flower skirt.jpg',
-    'category': 'T-Shirt',
-  },
-  {
-    'name': 'Grey nike shoes',
-    'points': 100,
-    'image': 'assets/images/grey.jpg',
-    'category': 'Dress',
-  },
-  {
-    'name': 'Ping Shoes',
-    'points': 100,
-    'image': 'assets/images/pink.jpg',
-    'category': 'Dress',
-  },
-];

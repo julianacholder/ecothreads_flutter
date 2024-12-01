@@ -18,6 +18,9 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'widget_tree.dart';
 import 'auth_service.dart';
+import '../pages/card_provider.dart';
+import 'package:provider/provider.dart';
+import 'pages/messagedonor.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -31,7 +34,12 @@ Future<void> main() async {
     authDomain: 'ecothreads-b1d6e.firebaseapp.com',
     measurementId: 'G-PFVCYKNXBD',
   ));
-  runApp(const MyApp());
+  runApp(
+    ChangeNotifierProvider(
+      create: (_) => CartProvider(),
+      child: const MyApp(),
+    ),
+  );
 }
 
 class MyApp extends StatelessWidget {
@@ -49,11 +57,13 @@ class MyApp extends StatelessWidget {
       ),
       home: const LoadingPage(),
       onGenerateRoute: (settings) {
-        // Handle navigation with arguments
         if (settings.name == '/main') {
           final int? tabIndex = settings.arguments as int?;
           return MaterialPageRoute(
-            builder: (context) => MainScreen(initialIndex: tabIndex ?? 0),
+            builder: (context) => ChangeNotifierProvider.value(
+              value: Provider.of<CartProvider>(context, listen: false),
+              child: MainScreen(initialIndex: tabIndex ?? 0),
+            ),
           );
         }
         return null;

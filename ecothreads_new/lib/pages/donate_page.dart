@@ -67,11 +67,16 @@ class _DonatePageState extends State<DonatePage> {
     setState(() => _isLoading = true);
 
     try {
+      // First get the user data
+      final userDoc = await _firestore.collection('users').doc(user!.uid).get();
+      final userData = userDoc.data() ?? {};
+      final userFullName = userData['fullName'] ?? 'Anonymous';
+      final userProfileImage = userData['profileImageUrl'];
+
       // Create storage instance with correct bucket
       final storageInstance = FirebaseStorage.instanceFor(
           bucket: 'ecothreads-b1d6e.firebasestorage.app');
 
-      // Create file reference in the images folder
       final fileRef = storageInstance
           .ref()
           .child('images')
@@ -79,58 +84,55 @@ class _DonatePageState extends State<DonatePage> {
 
       print('Attempting to upload to: ${fileRef.fullPath}');
 
-      // Upload the file
       final uploadTask = await fileRef.putFile(_image!);
       print('Upload completed with state: ${uploadTask.state}');
 
       if (uploadTask.state == TaskState.success) {
-        // Get the download URL
         final imageUrl = await fileRef.getDownloadURL();
         print('Got download URL: $imageUrl');
 
-        // Create donation document
+        // Create donation document with user info
         DocumentReference donationRef =
             await _firestore.collection('donations').add({
           'userId': user!.uid,
+          'userFullName': userFullName,
+          'userProfileImage': userProfileImage,
           'itemName': _nameController.text,
           'description': _descriptionController.text,
           'condition': selectedCondition,
           'imageUrl': imageUrl,
           'points': conditionPoints,
           'createdAt': FieldValue.serverTimestamp(),
+          'status': 'available',
         });
 
         print('Created donation document');
 
-        // Add to clothing collection with markup
+        // Add to clothing collection with user info
         await _firestore.collection('clothing').add({
           'itemName': _nameController.text,
           'description': _descriptionController.text,
           'condition': selectedCondition,
           'imageUrl': imageUrl,
-          'points': conditionPoints + 150, // Markup for selling
+          'points': conditionPoints + 150,
           'originalDonationId': donationRef.id,
           'donorId': user!.uid,
+          'donorName': userFullName,
+          'donorProfileImage': userProfileImage,
           'createdAt': FieldValue.serverTimestamp(),
           'status': 'available'
         });
 
         print('Created clothing document');
 
-        // Update user's total points
-        DocumentSnapshot userDoc =
-            await _firestore.collection('users').doc(user!.uid).get();
-
+        // Update user points
         if (userDoc.exists) {
-          Map<String, dynamic> userData =
-              userDoc.data() as Map<String, dynamic>;
           int currentPoints = userData['points'] ?? 0;
           await _firestore.collection('users').doc(user!.uid).update({
             'points': currentPoints + conditionPoints,
           });
           print('Updated user points');
         } else {
-          // If user document doesn't exist, create it with initial points
           await _firestore.collection('users').doc(user!.uid).set({
             'points': conditionPoints,
             'createdAt': FieldValue.serverTimestamp(),
@@ -138,7 +140,6 @@ class _DonatePageState extends State<DonatePage> {
           print('Created new user document with initial points');
         }
 
-        // Show success dialog with earned points
         if (mounted) {
           _showDonationDialog(conditionPoints);
           _clearForm();

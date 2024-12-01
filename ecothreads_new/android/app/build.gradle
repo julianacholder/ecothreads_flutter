@@ -34,11 +34,23 @@ android {
         multiDexEnabled true
     }
 
+      signingConfigs {
+        release {
+            storeFile file('keystore.jks') // Path to your updated keystore file
+            storePassword 'Julia0478' // Keystore password
+            keyAlias 'keyAlias' // Key alias used during creation
+            keyPassword 'Julia0478' // Key password
+        }
+      }
+
     buildTypes {
         release {
             // TODO: Add your own signing config for the release build.
             // Signing with the debug keys for now, so `flutter run --release` works.
             signingConfig = signingConfigs.debug
+            minifyEnabled true 
+            shrinkResources false
+            signingConfig signingConfigs.release
         }
     }
 }
