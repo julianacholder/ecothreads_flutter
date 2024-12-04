@@ -1,9 +1,11 @@
+// Import necessary packages for UI, fonts, and Firebase functionality
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'itemdetail.dart';
 
+// StatefulWidget for the home page that displays available clothing items
 class HomePage extends StatefulWidget {
   const HomePage({Key? key}) : super(key: key);
 
@@ -12,23 +14,32 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
+  // Firebase instances for database and authentication
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final user = FirebaseAuth.instance.currentUser;
+
+  // State variables for search and filtering
   String _searchQuery = '';
   String _selectedCategory = 'All Items';
   final TextEditingController _searchController = TextEditingController();
+
+  // State variables for items and loading state
   List<Map<String, dynamic>> _allItems = [];
   bool _isLoading = true;
+
+  // User profile information
   String _userFullName = '';
   String? _userProfileImage;
 
   @override
   void initState() {
     super.initState();
+    // Load initial data when widget is created
     _loadUserData();
     _loadItems();
   }
 
+  // Fetch user profile data from Firestore
   Future<void> _loadUserData() async {
     if (user != null) {
       try {
@@ -47,11 +58,12 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
+  // Fetch available items from both donations and clothing collections
   Future<void> _loadItems() async {
     try {
       setState(() => _isLoading = true);
 
-      // Fetch donations
+      // Fetch available donations
       final QuerySnapshot donationsSnapshot = await _firestore
           .collection('donations')
           .where('status', isEqualTo: 'available')
@@ -63,7 +75,7 @@ class _HomePageState extends State<HomePage> {
 
       List<Map<String, dynamic>> items = [];
 
-      // Add donations
+      // Process donation items
       for (var doc in donationsSnapshot.docs) {
         final data = doc.data() as Map<String, dynamic>;
         items.add({
@@ -78,7 +90,7 @@ class _HomePageState extends State<HomePage> {
         });
       }
 
-      // Add clothing items
+      // Process clothing items
       for (var doc in clothingSnapshot.docs) {
         final data = doc.data() as Map<String, dynamic>;
         items.add({
@@ -103,6 +115,7 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
+  // Filter items based on search query and selected category
   List<Map<String, dynamic>> get filteredItems {
     return _allItems.where((item) {
       final matchesSearch = item['name']
@@ -124,6 +137,7 @@ class _HomePageState extends State<HomePage> {
         child: SafeArea(
           child: Stack(
             children: [
+              // Main content with CustomScrollView for better performance
               CustomScrollView(
                 slivers: [
                   SliverToBoxAdapter(
@@ -144,11 +158,13 @@ class _HomePageState extends State<HomePage> {
                     ),
                   ),
                   _buildItemsGrid(),
+                  // Bottom padding to account for navigation bar
                   const SliverToBoxAdapter(
                     child: SizedBox(height: 80),
                   ),
                 ],
               ),
+              // Loading indicator overlay
               if (_isLoading)
                 const Center(
                   child: CircularProgressIndicator(),
@@ -160,6 +176,7 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
+  // Build the welcome header with user profile
   Widget _buildHeader() {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -189,6 +206,7 @@ class _HomePageState extends State<HomePage> {
             ),
           ],
         ),
+        // User profile image
         CircleAvatar(
           radius: 25,
           backgroundColor: Colors.grey[300],
@@ -200,6 +218,7 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
+  // Build the search bar with filter button
   Widget _buildSearchBar() {
     return Row(
       children: [
@@ -227,6 +246,7 @@ class _HomePageState extends State<HomePage> {
           ),
         ),
         const SizedBox(width: 12),
+        // Filter button
         Container(
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
@@ -239,6 +259,7 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
+  // Build the promotional banner
   Widget _buildBanner() {
     return ClipRRect(
       borderRadius: BorderRadius.circular(16),
@@ -294,6 +315,7 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
+  // Build the category filter buttons
   Widget _buildCategories() {
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
@@ -312,6 +334,7 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
+  // Build individual category button
   Widget _buildCategoryButton(String text, IconData icon, bool isSelected) {
     return GestureDetector(
       onTap: () {
@@ -349,6 +372,7 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
+  // Build the grid of clothing items
   Widget _buildItemsGrid() {
     return SliverPadding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
@@ -379,6 +403,7 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
+  // Build individual item card
   Widget _buildItemCard(Map<String, dynamic> item) {
     return GestureDetector(
       onTap: () {
@@ -449,6 +474,7 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
+  // Clean up resources when widget is disposed
   @override
   void dispose() {
     _searchController.dispose();

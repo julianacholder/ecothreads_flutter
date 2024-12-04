@@ -1,9 +1,11 @@
+// Import necessary packages for Firebase authentication, database, and UI
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../auth.dart';
 import 'auth_service.dart';
 import 'package:flutter/material.dart';
 
+// StatefulWidget for user registration
 class SignUpPage extends StatefulWidget {
   const SignUpPage({super.key});
 
@@ -12,16 +14,19 @@ class SignUpPage extends StatefulWidget {
 }
 
 class _SignUpPageState extends State<SignUpPage> {
-  String? errorMessage = '';
-  bool _obscurePassword = true;
-  bool _isLoading = false;
+  // State variables for form management
+  String? errorMessage = ''; // Store error messages
+  bool _obscurePassword = true; // Toggle password visibility
+  bool _isLoading = false; // Track registration progress
 
+  // Controllers for form input fields
   final TextEditingController _controllerFullName = TextEditingController();
   final TextEditingController _controllerUsername = TextEditingController();
   final TextEditingController _controllerEmail = TextEditingController();
   final TextEditingController _controllerPassword = TextEditingController();
   final AuthService _authService = AuthService();
 
+  // Clean up controllers when widget is disposed
   @override
   void dispose() {
     _controllerFullName.dispose();
@@ -31,23 +36,25 @@ class _SignUpPageState extends State<SignUpPage> {
     super.dispose();
   }
 
+  // Validate email format using RegExp
   bool isValidEmail(String email) {
     return RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(email);
   }
 
+  // Handle user registration
   Future<void> _register() async {
-    // Set loading state
     setState(() {
       _isLoading = true;
       errorMessage = '';
     });
 
+    // Get form values
     final fullName = _controllerFullName.text.trim();
     final username = _controllerUsername.text.trim();
     final email = _controllerEmail.text.trim();
     final password = _controllerPassword.text;
 
-    // Validation checks
+    // Validate input fields
     if (fullName.isEmpty ||
         username.isEmpty ||
         !isValidEmail(email) ||
@@ -62,12 +69,12 @@ class _SignUpPageState extends State<SignUpPage> {
     }
 
     try {
-      // Step 1: Register with Firebase Auth
+      // Create user account in Firebase Auth
       User? user =
           await _authService.registerWithEmailPassword(email, password);
 
       if (user != null) {
-        // Step 2: Store user data in Firestore with retry mechanism
+        // Store additional user data in Firestore
         bool firestoreSuccess = await _storeUserDataWithRetry(
           user,
           fullName,
@@ -76,7 +83,7 @@ class _SignUpPageState extends State<SignUpPage> {
         );
 
         if (firestoreSuccess) {
-          // Navigate to main screen only if both operations succeed
+          // Navigate to main screen on success
           if (mounted) {
             Navigator.pushNamedAndRemoveUntil(
               context,
@@ -86,7 +93,7 @@ class _SignUpPageState extends State<SignUpPage> {
             );
           }
         } else {
-          // If Firestore fails, delete the Auth user and show error
+          // Clean up if Firestore storage fails
           await user.delete();
           setState(() {
             errorMessage = 'Failed to create account. Please try again later.';
@@ -94,14 +101,17 @@ class _SignUpPageState extends State<SignUpPage> {
         }
       }
     } on FirebaseAuthException catch (e) {
+      // Handle Firebase authentication errors
       setState(() {
         errorMessage = _getFirebaseAuthErrorMessage(e);
       });
     } catch (e) {
+      // Handle general errors
       setState(() {
         errorMessage = 'An unexpected error occurred. Please try again.';
       });
     } finally {
+      // Reset loading state
       if (mounted) {
         setState(() {
           _isLoading = false;
@@ -110,6 +120,7 @@ class _SignUpPageState extends State<SignUpPage> {
     }
   }
 
+  // Convert Firebase error codes to user-friendly messages
   String _getFirebaseAuthErrorMessage(FirebaseAuthException e) {
     switch (e.code) {
       case 'email-already-in-use':
@@ -123,6 +134,7 @@ class _SignUpPageState extends State<SignUpPage> {
     }
   }
 
+  // Get validation error messages for form fields
   String getValidationErrorMessage(
       String fullName, String username, String email, String password) {
     if (fullName.isEmpty) return 'Full name cannot be empty';
@@ -135,12 +147,14 @@ class _SignUpPageState extends State<SignUpPage> {
     return '';
   }
 
+  // Store user data in Firestore with retry mechanism
   Future<bool> _storeUserDataWithRetry(
       User user, String fullName, String username, String email) async {
     final firestore = FirebaseFirestore.instance;
     int retryAttempts = 3;
     int delayMilliseconds = 1000; // Start with 1 second delay
 
+    // Retry loop for handling temporary failures
     for (int i = 0; i < retryAttempts; i++) {
       try {
         await firestore.collection('users').doc(user.uid).set({
@@ -155,13 +169,15 @@ class _SignUpPageState extends State<SignUpPage> {
           print('Final Firestore Error: $e');
           return false;
         }
+        // Exponential backoff between retries
         await Future.delayed(Duration(milliseconds: delayMilliseconds));
-        delayMilliseconds *= 2; // Exponential backoff
+        delayMilliseconds *= 2;
       }
     }
     return false;
   }
 
+  // Widget to display error messages
   Widget _errorMessage() {
     return Text(
       errorMessage == '' ? '' : 'Error: $errorMessage',
@@ -180,7 +196,7 @@ class _SignUpPageState extends State<SignUpPage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                // Logo
+                // App logo
                 Center(
                   child: Image.asset(
                     'assets/images/green logo.jpg',
@@ -189,7 +205,7 @@ class _SignUpPageState extends State<SignUpPage> {
                 ),
                 const SizedBox(height: 16),
 
-                // Title
+                // Welcome title
                 const Text(
                   'Welcome to EcoThreads',
                   style: TextStyle(
@@ -209,11 +225,11 @@ class _SignUpPageState extends State<SignUpPage> {
                 ),
                 const SizedBox(height: 24),
 
-                // Error Message
+                // Error message display
                 _errorMessage(),
                 const SizedBox(height: 16),
 
-                // Full Name Field
+                // Full Name input field
                 TextField(
                   controller: _controllerFullName,
                   decoration: InputDecoration(
@@ -231,7 +247,7 @@ class _SignUpPageState extends State<SignUpPage> {
                 ),
                 const SizedBox(height: 16),
 
-                // Username Field
+                // Username input field
                 TextField(
                   controller: _controllerUsername,
                   decoration: InputDecoration(
@@ -249,7 +265,7 @@ class _SignUpPageState extends State<SignUpPage> {
                 ),
                 const SizedBox(height: 16),
 
-                // Email Field
+                // Email input field
                 TextField(
                   controller: _controllerEmail,
                   keyboardType: TextInputType.emailAddress,
@@ -268,7 +284,7 @@ class _SignUpPageState extends State<SignUpPage> {
                 ),
                 const SizedBox(height: 16),
 
-                // Password Field
+                // Password input field with visibility toggle
                 TextField(
                   controller: _controllerPassword,
                   obscureText: _obscurePassword,
@@ -300,7 +316,7 @@ class _SignUpPageState extends State<SignUpPage> {
                 ),
                 const SizedBox(height: 24),
 
-                // Terms and Conditions
+                // Terms and conditions text
                 RichText(
                   text: const TextSpan(
                     style: TextStyle(color: Colors.grey, fontSize: 14),
@@ -334,7 +350,7 @@ class _SignUpPageState extends State<SignUpPage> {
                 ),
                 const SizedBox(height: 24),
 
-                // Create Account Button
+                // Create Account button with loading state
                 ElevatedButton(
                   onPressed: _isLoading ? null : _register,
                   style: ElevatedButton.styleFrom(
@@ -362,7 +378,7 @@ class _SignUpPageState extends State<SignUpPage> {
                 ),
                 const SizedBox(height: 24),
 
-                // Login link
+                // Login link for existing users
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [

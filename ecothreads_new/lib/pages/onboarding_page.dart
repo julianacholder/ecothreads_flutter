@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+// StatelessWidget for the onboarding/welcome screen
 class OnboardingPage extends StatelessWidget {
   const OnboardingPage({super.key});
 
@@ -7,30 +8,36 @@ class OnboardingPage extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       body: Container(
+        // Make container fill the entire screen
         width: double.infinity,
         height: double.infinity,
+        // Set background image with full cover
         decoration: const BoxDecoration(
           image: DecorationImage(
             image: AssetImage('assets/images/hanging.jpg'),
             fit: BoxFit.cover,
           ),
         ),
+        // Wrap content in SafeArea to avoid system UI overlap
         child: SafeArea(
           child: Padding(
+            // Add padding for content layout
             padding: const EdgeInsets.only(left: 24.0, right: 24, top: 80),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                // Main headline text
                 const Text(
                   'The\nsustainable\nway to\nrefresh your\nwardrobe.',
                   style: TextStyle(
                     fontSize: 60,
                     fontWeight: FontWeight.bold,
                     color: Colors.white,
-                    height: 0.9, // Tightens line spacing
+                    height: 0.9, // Reduce space between lines
                   ),
                 ),
                 const SizedBox(height: 25),
+                // Subtitle/tagline
                 const Text(
                   'EcoThreads: Donate, earn, renew.',
                   style: TextStyle(
@@ -39,8 +46,9 @@ class OnboardingPage extends StatelessWidget {
                     fontWeight: FontWeight.w200,
                   ),
                 ),
+                // Push buttons to bottom of screen
                 const Spacer(),
-                // Get Started Button
+                // Get Started Button - White background
                 ElevatedButton(
                   onPressed: () {
                     Navigator.pushNamed(context, '/signup');
@@ -70,7 +78,7 @@ class OnboardingPage extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 16),
-                // Login Button
+                // Login Button - Dark background
                 ElevatedButton(
                   onPressed: () {
                     Navigator.pushNamed(context, '/login');
@@ -97,6 +105,7 @@ class OnboardingPage extends StatelessWidget {
                     ],
                   ),
                 ),
+                // Bottom padding
                 const SizedBox(height: 40),
               ],
             ),

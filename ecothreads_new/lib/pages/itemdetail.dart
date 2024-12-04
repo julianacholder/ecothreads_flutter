@@ -1,3 +1,4 @@
+// Import necessary packages for UI, Firebase functionality, and state management
 import 'package:ecothreads/pages/messagedonor.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -6,11 +7,14 @@ import 'package:provider/provider.dart';
 import '../pages/card_provider.dart';
 import 'checkout.dart';
 
+// StatelessWidget for displaying detailed product information
 class ProductPage extends StatelessWidget {
+  // Item data passed from the previous screen
   final Map<String, dynamic> item;
 
   const ProductPage({Key? key, required this.item}) : super(key: key);
 
+  // Initialize chat with the donor in Firestore
   void _startChat(BuildContext context) async {
     final currentUser = FirebaseAuth.instance.currentUser;
     if (currentUser == null) return;
@@ -19,9 +23,11 @@ class ProductPage extends StatelessWidget {
     if (donorId == null) return;
 
     try {
+      // Create a unique chat ID combining user and donor IDs
       final chatId = '${currentUser.uid}_$donorId';
       final firestore = FirebaseFirestore.instance;
 
+      // Create or update chat document in Firestore
       await firestore.collection('chats').doc(chatId).set({
         'participants': [currentUser.uid, donorId],
         'lastMessage': 'Chat started',
@@ -31,6 +37,7 @@ class ProductPage extends StatelessWidget {
         'itemImage': item['image'],
       }, SetOptions(merge: true));
 
+      // Navigate to chat screen if context is still valid
       if (context.mounted) {
         Navigator.pushNamed(
           context,
@@ -48,6 +55,7 @@ class ProductPage extends StatelessWidget {
     }
   }
 
+  // Add item to shopping cart using CartProvider
   void _addToCart(BuildContext context) {
     final cartItem = CartItem(
       name: item['name'] ?? 'Unnamed Item',
@@ -57,10 +65,10 @@ class ProductPage extends StatelessWidget {
       imageUrl: item['image'] ?? '',
     );
 
-    // Add to cart
+    // Add item to cart using provider
     context.read<CartProvider>().addItem(cartItem);
 
-    // Show success message
+    // Show success message with action to view cart
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: const Text('Item added to cart'),
@@ -83,6 +91,7 @@ class ProductPage extends StatelessWidget {
 
     return Scaffold(
       backgroundColor: Colors.white,
+      // Custom app bar with back button and favorite icon
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
@@ -99,12 +108,14 @@ class ProductPage extends StatelessWidget {
           ),
         ],
       ),
+      // Scrollable content area
       body: SingleChildScrollView(
         child: Padding(
           padding: const EdgeInsets.only(left: 16.0, right: 16, top: 50),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              // Product image with error handling
               ClipRRect(
                 borderRadius: BorderRadius.circular(16),
                 child: Image.network(
@@ -123,11 +134,13 @@ class ProductPage extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 16),
+              // Product name
               Text(
                 item['name'] ?? 'Unnamed Item',
                 style:
                     const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
               ),
+              // Rating and condition
               Row(
                 children: [
                   Icon(Icons.star, color: Colors.yellow[700], size: 20),
@@ -142,11 +155,13 @@ class ProductPage extends StatelessWidget {
                 ],
               ),
               const SizedBox(height: 8),
+              // Product description
               Text(
                 item['description'] ?? "No description available",
                 style: TextStyle(color: Colors.grey[600]),
               ),
               const SizedBox(height: 16),
+              // Size and price information
               Row(
                 children: [
                   const Text(
@@ -180,6 +195,7 @@ class ProductPage extends StatelessWidget {
                 ],
               ),
               const SizedBox(height: 16),
+              // Donor information
               Row(
                 children: [
                   CircleAvatar(
@@ -200,6 +216,7 @@ class ProductPage extends StatelessWidget {
                 ],
               ),
               const SizedBox(height: 24),
+              // Action buttons for messaging donor and adding to cart
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                 children: [

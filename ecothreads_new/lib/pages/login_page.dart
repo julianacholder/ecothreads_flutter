@@ -1,9 +1,11 @@
+// Import required packages and files for authentication and UI
 import '../auth.dart';
 import '../auth_service.dart';
 import 'signup_page.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
+// StatefulWidget for login functionality
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
 
@@ -12,15 +14,18 @@ class LoginPage extends StatefulWidget {
 }
 
 class _LoginPageState extends State<LoginPage> {
+  // State variables for form management and error handling
   String? errorMessage = '';
   bool isLogin = true;
-  bool _obscurePassword = true;
-  bool _isLoading = false;
+  bool _obscurePassword = true; // Controls password visibility
+  bool _isLoading = false; // Tracks login progress
 
+  // Controllers for form input fields
   final TextEditingController _controllerEmail = TextEditingController();
   final TextEditingController _controllerPassword = TextEditingController();
   final AuthService _authService = AuthService();
 
+  // Clean up controllers when the widget is disposed
   @override
   void dispose() {
     _controllerEmail.dispose();
@@ -28,11 +33,13 @@ class _LoginPageState extends State<LoginPage> {
     super.dispose();
   }
 
+  // Email validation using RegExp
   bool _isValidEmail(String email) {
     return RegExp(r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$')
         .hasMatch(email);
   }
 
+  // Handle login logic
   Future<void> _login() async {
     setState(() {
       errorMessage = '';
@@ -42,7 +49,7 @@ class _LoginPageState extends State<LoginPage> {
     final email = _controllerEmail.text.trim();
     final password = _controllerPassword.text;
 
-    // Validation
+    // Input validation
     if (email.isEmpty) {
       setState(() {
         errorMessage = 'Email cannot be empty';
@@ -68,9 +75,11 @@ class _LoginPageState extends State<LoginPage> {
     }
 
     try {
+      // Attempt login using AuthService
       User? user = await _authService.signInWithEmailPassword(email, password);
       if (user != null) {
         if (mounted) {
+          // Navigate to main screen on successful login
           Navigator.pushNamedAndRemoveUntil(
             context,
             '/main',
@@ -84,14 +93,17 @@ class _LoginPageState extends State<LoginPage> {
         });
       }
     } on FirebaseAuthException catch (e) {
+      // Handle Firebase authentication errors
       setState(() {
         errorMessage = _getFirebaseAuthErrorMessage(e);
       });
     } catch (e) {
+      // Handle general errors
       setState(() {
         errorMessage = 'An error occurred during login';
       });
     } finally {
+      // Reset loading state
       if (mounted) {
         setState(() {
           _isLoading = false;
@@ -100,6 +112,7 @@ class _LoginPageState extends State<LoginPage> {
     }
   }
 
+  // Convert Firebase error codes to user-friendly messages
   String _getFirebaseAuthErrorMessage(FirebaseAuthException e) {
     switch (e.code) {
       case 'user-not-found':
@@ -127,7 +140,7 @@ class _LoginPageState extends State<LoginPage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                // Logo
+                // App logo
                 Center(
                   child: Image.asset(
                     'assets/images/green logo.jpg',
@@ -136,7 +149,7 @@ class _LoginPageState extends State<LoginPage> {
                 ),
                 const SizedBox(height: 16),
 
-                // Title
+                // Login page title
                 const Text(
                   'Login to your account',
                   style: TextStyle(
@@ -146,7 +159,7 @@ class _LoginPageState extends State<LoginPage> {
                 ),
                 const SizedBox(height: 8),
 
-                // Subtitle
+                // App tagline
                 const Text(
                   'Donate, Earn, Renew',
                   style: TextStyle(
@@ -156,7 +169,7 @@ class _LoginPageState extends State<LoginPage> {
                 ),
                 const SizedBox(height: 32),
 
-                // Error Message
+                // Error message display
                 if (errorMessage != null && errorMessage!.isNotEmpty)
                   Padding(
                     padding: const EdgeInsets.only(bottom: 16),
@@ -167,7 +180,7 @@ class _LoginPageState extends State<LoginPage> {
                     ),
                   ),
 
-                // Email Field
+                // Email input field
                 const Text(
                   'Email',
                   style: TextStyle(
@@ -193,7 +206,7 @@ class _LoginPageState extends State<LoginPage> {
                 ),
                 const SizedBox(height: 24),
 
-                // Password Field
+                // Password input field with toggle visibility
                 const Text(
                   'Password',
                   style: TextStyle(
@@ -232,7 +245,7 @@ class _LoginPageState extends State<LoginPage> {
                 ),
                 const SizedBox(height: 12),
 
-                // Forgot Password
+                // Password reset link
                 Row(
                   children: [
                     const Text(
@@ -255,7 +268,7 @@ class _LoginPageState extends State<LoginPage> {
                 ),
                 const SizedBox(height: 32),
 
-                // Login Button
+                // Login button with loading state
                 ElevatedButton(
                   onPressed: _isLoading ? null : _login,
                   style: ElevatedButton.styleFrom(
@@ -284,7 +297,7 @@ class _LoginPageState extends State<LoginPage> {
 
                 const SizedBox(height: 32),
 
-                // Sign up link
+                // Sign up navigation link
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [

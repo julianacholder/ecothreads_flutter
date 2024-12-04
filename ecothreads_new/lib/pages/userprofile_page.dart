@@ -8,6 +8,7 @@ import 'package:firebase_storage/firebase_storage.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:io';
 
+// Main widget for user profile screen
 class UserProfile extends StatefulWidget {
   const UserProfile({super.key});
 
@@ -15,6 +16,7 @@ class UserProfile extends StatefulWidget {
   State<UserProfile> createState() => _UserProfileState();
 }
 
+// Firebase instances for authentication, database, and storage
 class _UserProfileState extends State<UserProfile> {
   final user = FirebaseAuth.instance.currentUser;
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
@@ -23,6 +25,7 @@ class _UserProfileState extends State<UserProfile> {
 
   bool _isLoading = false;
 
+// Fetch user data including donations and points
   Future<Map<String, dynamic>> getUserData() async {
     if (user != null) {
       try {
@@ -55,6 +58,8 @@ class _UserProfileState extends State<UserProfile> {
     }
     return {};
   }
+
+  // Show dialog to update listing status
 
   void _showStatusUpdateDialog(String listingId, String currentStatus) {
     print('Opening dialog for listing ID: $listingId');
@@ -157,6 +162,8 @@ class _UserProfileState extends State<UserProfile> {
       },
     );
   }
+
+  // Upload cover image to Firebase Storage
 
   Future<void> _uploadCoverImage() async {
     try {
