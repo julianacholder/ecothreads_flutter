@@ -1,43 +1,46 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'login_page.dart'; // Ensure correct import for navigation
+import 'signup_page.dart'; // Ensure correct import for navigation
 
-// StatelessWidget for the onboarding/welcome screen
 class OnboardingPage extends StatelessWidget {
   const OnboardingPage({super.key});
+
+  // ✅ Function to save onboarding completion status
+  Future<void> _completeOnboarding(BuildContext context, String route) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('seenOnboarding', true); // Save onboarding status
+    Navigator.pushReplacementNamed(context, route); // Navigate to login/signup
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       body: Container(
-        // Make container fill the entire screen
         width: double.infinity,
         height: double.infinity,
-        // Set background image with full cover
         decoration: const BoxDecoration(
           image: DecorationImage(
             image: AssetImage('assets/images/hanging.jpg'),
             fit: BoxFit.cover,
           ),
         ),
-        // Wrap content in SafeArea to avoid system UI overlap
         child: SafeArea(
           child: Padding(
-            // Add padding for content layout
             padding: const EdgeInsets.only(left: 24.0, right: 24, top: 80),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Main headline text
                 const Text(
                   'The\nsustainable\nway to\nrefresh your\nwardrobe.',
                   style: TextStyle(
                     fontSize: 60,
                     fontWeight: FontWeight.bold,
                     color: Colors.white,
-                    height: 0.9, // Reduce space between lines
+                    height: 0.9,
                   ),
                 ),
                 const SizedBox(height: 25),
-                // Subtitle/tagline
                 const Text(
                   'EcoThreads: Donate, earn, renew.',
                   style: TextStyle(
@@ -46,13 +49,10 @@ class OnboardingPage extends StatelessWidget {
                     fontWeight: FontWeight.w200,
                   ),
                 ),
-                // Push buttons to bottom of screen
                 const Spacer(),
-                // Get Started Button - White background
+                // ✅ "Get Started" Button
                 ElevatedButton(
-                  onPressed: () {
-                    Navigator.pushNamed(context, '/signup');
-                  },
+                  onPressed: () => _completeOnboarding(context, '/signup'),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.white,
                     foregroundColor: Colors.black,
@@ -78,11 +78,9 @@ class OnboardingPage extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 16),
-                // Login Button - Dark background
+                // ✅ "Login" Button
                 ElevatedButton(
-                  onPressed: () {
-                    Navigator.pushNamed(context, '/login');
-                  },
+                  onPressed: () => _completeOnboarding(context, '/login'),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Color(0xFF1A1A1A),
                     foregroundColor: Colors.white,
@@ -92,20 +90,14 @@ class OnboardingPage extends StatelessWidget {
                     ),
                     elevation: 0,
                   ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: const [
-                      Text(
-                        'Login',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ],
+                  child: const Text(
+                    'Login',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                 ),
-                // Bottom padding
                 const SizedBox(height: 40),
               ],
             ),

@@ -1,11 +1,163 @@
-// Import necessary packages for Firebase authentication, database, and UI
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import '../auth.dart';
-import 'auth_service.dart';
 import 'package:flutter/material.dart';
+import 'package:google_sign_in/google_sign_in.dart';
+import '../auth_service.dart';
+import 'package:flutter/gestures.dart';
 
-// StatefulWidget for user registration
+// At the top of your file, create a constant for the text
+const String termsAndPrivacyText = '''
+Eco Threads - Terms of Service and Privacy Policy
+
+Terms of Service
+Effective Date: February 5, 2025
+
+Welcome to Eco Threads! By using our app, you agree to these Terms of Service. Please read them carefully.
+
+...
+1. Acceptance of Terms
+
+By accessing or using Eco Threads, you agree to be bound by these terms. If you do not agree, please do not use the app.
+
+2. Description of Service
+
+Eco Threads is a platform that allows users to donate, receive, and upcycle clothing items. Users can create profiles, upload images of donated items, and interact with other users.
+
+3. User Accounts
+	•	You must be at least 13 years old to use Eco Threads.
+	•	You are responsible for maintaining the confidentiality of your account information.
+	•	We reserve the right to suspend or terminate accounts that violate our terms.
+
+4. Donations and Transactions
+	•	Items donated on Eco Threads should be in a usable condition.
+	•	Users should ensure accurate descriptions of items before donating.
+	•	Eco Threads is not responsible for any issues arising from donations or item conditions.
+
+5. Content and Conduct
+	•	Users must not post harmful, offensive, or illegal content.
+	•	Spamming, harassment, or fraudulent activity is strictly prohibited.
+	•	We reserve the right to remove any content that violates these terms.
+
+6. Limitation of Liability
+
+  Eco Threads is not responsible for:
+	•	Any damage or loss related to donated items.
+	•	User interactions or disputes.
+	•	Technical issues or service interruptions.
+
+7. Changes to the Terms
+
+We may update these terms from time to time. Continued use of the app means you accept any changes.
+...
+
+Privacy Policy
+
+Effective Date: February 5, 2025
+
+At Eco Threads, we value your privacy. This policy explains how we collect, use, and protect your information.
+
+1. Information We Collect
+
+We collect the following types of data:
+	•	Personal Information: Name, email, and profile details when you sign up.
+	•	User Content: Images and descriptions of donated items.
+	•	Usage Data: Interaction logs, device information, and analytics.
+
+2. How We Use Your Information
+
+We use your data to:
+	•	Provide and improve the Eco Threads experience.
+	•	Facilitate donations and user interactions.
+	•	Communicate with users about updates and support.
+	•	Monitor and enhance app security.
+
+3. Sharing and Disclosure
+
+We do not sell or rent your data. However, we may share it with:
+	•	Service providers who help operate Eco Threads.
+	•	Legal authorities if required by law.
+
+4. Data Security
+
+We take reasonable measures to protect your data from unauthorized access. However, no system is completely secure, and we cannot guarantee absolute protection.
+
+5. Your Rights
+    You have the right to:
+      •	Access and update your personal data.
+      •	Request data deletion.
+      •	Opt out of certain data collection practices.
+
+6. Changes to This Policy
+
+We may update this Privacy Policy from time to time. Continued use of Eco Threads after changes means you accept the updated policy.
+
+7. Contact Us
+
+If you have any questions about these terms or our privacy policy, please contact us at info.ecothreads@gmail.com
+
+...
+By using Eco Threads, you acknowledge that you have read and agree to these Terms of Service and Privacy Policy.
+''';
+
+// Method to show the dialog
+void _showTermsAndPrivacy(BuildContext context) {
+  showDialog(
+    context: context,
+    builder: (BuildContext context) {
+      return Dialog(
+        insetPadding: const EdgeInsets.all(20),
+        child: Container(
+          constraints: const BoxConstraints(maxHeight: 500), // Set max height
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text(
+                    'Terms & Privacy Policy',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close),
+                    onPressed: () => Navigator.of(context).pop(),
+                  ),
+                ],
+              ),
+              const Divider(),
+              Expanded(
+                child: SingleChildScrollView(
+                  child: Text(
+                    termsAndPrivacyText,
+                    style: const TextStyle(fontSize: 14),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.grey[300],
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                  ),
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: const Text('Close'),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    },
+  );
+}
+
 class SignUpPage extends StatefulWidget {
   const SignUpPage({super.key});
 
@@ -14,19 +166,16 @@ class SignUpPage extends StatefulWidget {
 }
 
 class _SignUpPageState extends State<SignUpPage> {
-  // State variables for form management
-  String? errorMessage = ''; // Store error messages
-  bool _obscurePassword = true; // Toggle password visibility
-  bool _isLoading = false; // Track registration progress
+  String? errorMessage = '';
+  bool _obscurePassword = true;
+  bool _isLoading = false;
 
-  // Controllers for form input fields
   final TextEditingController _controllerFullName = TextEditingController();
   final TextEditingController _controllerUsername = TextEditingController();
   final TextEditingController _controllerEmail = TextEditingController();
   final TextEditingController _controllerPassword = TextEditingController();
   final AuthService _authService = AuthService();
 
-  // Clean up controllers when widget is disposed
   @override
   void dispose() {
     _controllerFullName.dispose();
@@ -36,25 +185,65 @@ class _SignUpPageState extends State<SignUpPage> {
     super.dispose();
   }
 
-  // Validate email format using RegExp
   bool isValidEmail(String email) {
     return RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(email);
   }
 
-  // Handle user registration
+  Future<void> _signInWithGoogle() async {
+    setState(() {
+      _isLoading = true;
+      errorMessage = '';
+    });
+
+    try {
+      final user = await _authService.signInWithGoogle();
+
+      if (user != null) {
+        await _storeUserDataWithRetry(
+          user,
+          user.displayName ?? '',
+          user.email?.split('@')[0] ?? '',
+          user.email ?? '',
+          isGoogleSignIn: true,
+        );
+
+        if (mounted) {
+          Navigator.pushNamedAndRemoveUntil(
+            context,
+            '/main',
+            (route) => false,
+            arguments: 4,
+          );
+        }
+      } else {
+        setState(() {
+          errorMessage = 'Google sign in failed. Please try again.';
+        });
+      }
+    } catch (e) {
+      setState(() {
+        errorMessage = 'An error occurred during Google sign in.';
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
   Future<void> _register() async {
     setState(() {
       _isLoading = true;
       errorMessage = '';
     });
 
-    // Get form values
     final fullName = _controllerFullName.text.trim();
     final username = _controllerUsername.text.trim();
     final email = _controllerEmail.text.trim();
     final password = _controllerPassword.text;
 
-    // Validate input fields
     if (fullName.isEmpty ||
         username.isEmpty ||
         !isValidEmail(email) ||
@@ -69,12 +258,10 @@ class _SignUpPageState extends State<SignUpPage> {
     }
 
     try {
-      // Create user account in Firebase Auth
       User? user =
           await _authService.registerWithEmailPassword(email, password);
 
       if (user != null) {
-        // Store additional user data in Firestore
         bool firestoreSuccess = await _storeUserDataWithRetry(
           user,
           fullName,
@@ -83,7 +270,6 @@ class _SignUpPageState extends State<SignUpPage> {
         );
 
         if (firestoreSuccess) {
-          // Navigate to main screen on success
           if (mounted) {
             Navigator.pushNamedAndRemoveUntil(
               context,
@@ -93,7 +279,6 @@ class _SignUpPageState extends State<SignUpPage> {
             );
           }
         } else {
-          // Clean up if Firestore storage fails
           await user.delete();
           setState(() {
             errorMessage = 'Failed to create account. Please try again later.';
@@ -101,17 +286,14 @@ class _SignUpPageState extends State<SignUpPage> {
         }
       }
     } on FirebaseAuthException catch (e) {
-      // Handle Firebase authentication errors
       setState(() {
         errorMessage = _getFirebaseAuthErrorMessage(e);
       });
     } catch (e) {
-      // Handle general errors
       setState(() {
         errorMessage = 'An unexpected error occurred. Please try again.';
       });
     } finally {
-      // Reset loading state
       if (mounted) {
         setState(() {
           _isLoading = false;
@@ -120,7 +302,6 @@ class _SignUpPageState extends State<SignUpPage> {
     }
   }
 
-  // Convert Firebase error codes to user-friendly messages
   String _getFirebaseAuthErrorMessage(FirebaseAuthException e) {
     switch (e.code) {
       case 'email-already-in-use':
@@ -134,7 +315,6 @@ class _SignUpPageState extends State<SignUpPage> {
     }
   }
 
-  // Get validation error messages for form fields
   String getValidationErrorMessage(
       String fullName, String username, String email, String password) {
     if (fullName.isEmpty) return 'Full name cannot be empty';
@@ -147,14 +327,13 @@ class _SignUpPageState extends State<SignUpPage> {
     return '';
   }
 
-  // Store user data in Firestore with retry mechanism
   Future<bool> _storeUserDataWithRetry(
-      User user, String fullName, String username, String email) async {
+      User user, String fullName, String username, String email,
+      {bool isGoogleSignIn = false}) async {
     final firestore = FirebaseFirestore.instance;
     int retryAttempts = 3;
-    int delayMilliseconds = 1000; // Start with 1 second delay
+    int delayMilliseconds = 1000;
 
-    // Retry loop for handling temporary failures
     for (int i = 0; i < retryAttempts; i++) {
       try {
         await firestore.collection('users').doc(user.uid).set({
@@ -162,6 +341,8 @@ class _SignUpPageState extends State<SignUpPage> {
           'username': username,
           'email': email,
           'createdAt': FieldValue.serverTimestamp(),
+          'signInMethod': isGoogleSignIn ? 'google' : 'email',
+          'photoURL': isGoogleSignIn ? user.photoURL : null,
         });
         return true;
       } catch (e) {
@@ -169,7 +350,6 @@ class _SignUpPageState extends State<SignUpPage> {
           print('Final Firestore Error: $e');
           return false;
         }
-        // Exponential backoff between retries
         await Future.delayed(Duration(milliseconds: delayMilliseconds));
         delayMilliseconds *= 2;
       }
@@ -177,7 +357,6 @@ class _SignUpPageState extends State<SignUpPage> {
     return false;
   }
 
-  // Widget to display error messages
   Widget _errorMessage() {
     return Text(
       errorMessage == '' ? '' : 'Error: $errorMessage',
@@ -186,26 +365,36 @@ class _SignUpPageState extends State<SignUpPage> {
     );
   }
 
+  late final List<TapGestureRecognizer> _recognizers;
+
+  @override
+  void initState() {
+    super.initState();
+    _recognizers = List.generate(3, (_) => TapGestureRecognizer());
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       body: SafeArea(
         child: SingleChildScrollView(
           child: Padding(
-            padding: const EdgeInsets.all(24.0),
+            padding: const EdgeInsets.symmetric(
+              horizontal: 24.0,
+              vertical: 30,
+            ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 // App logo
                 Center(
                   child: Image.asset(
-                    'assets/images/green logo.jpg',
+                    'assets/images/greeneco.png',
                     height: 60,
                   ),
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: 20),
 
-                // Welcome title
                 const Text(
                   'Welcome to EcoThreads',
                   style: TextStyle(
@@ -215,7 +404,6 @@ class _SignUpPageState extends State<SignUpPage> {
                 ),
                 const SizedBox(height: 8),
 
-                // Subtitle
                 const Text(
                   "Let's create your account.",
                   style: TextStyle(
@@ -223,13 +411,9 @@ class _SignUpPageState extends State<SignUpPage> {
                     fontSize: 16,
                   ),
                 ),
-                const SizedBox(height: 24),
 
-                // Error message display
                 _errorMessage(),
-                const SizedBox(height: 16),
 
-                // Full Name input field
                 TextField(
                   controller: _controllerFullName,
                   decoration: InputDecoration(
@@ -247,7 +431,6 @@ class _SignUpPageState extends State<SignUpPage> {
                 ),
                 const SizedBox(height: 16),
 
-                // Username input field
                 TextField(
                   controller: _controllerUsername,
                   decoration: InputDecoration(
@@ -265,7 +448,6 @@ class _SignUpPageState extends State<SignUpPage> {
                 ),
                 const SizedBox(height: 16),
 
-                // Email input field
                 TextField(
                   controller: _controllerEmail,
                   keyboardType: TextInputType.emailAddress,
@@ -284,7 +466,6 @@ class _SignUpPageState extends State<SignUpPage> {
                 ),
                 const SizedBox(height: 16),
 
-                // Password input field with visibility toggle
                 TextField(
                   controller: _controllerPassword,
                   obscureText: _obscurePassword,
@@ -316,41 +497,48 @@ class _SignUpPageState extends State<SignUpPage> {
                 ),
                 const SizedBox(height: 24),
 
-                // Terms and conditions text
                 RichText(
-                  text: const TextSpan(
-                    style: TextStyle(color: Colors.grey, fontSize: 14),
+                  text: TextSpan(
+                    style: const TextStyle(color: Colors.grey, fontSize: 14),
                     children: [
-                      TextSpan(text: 'By signing up you agree to our '),
+                      const TextSpan(text: 'By signing up you agree to our '),
                       TextSpan(
                         text: 'Terms',
-                        style: TextStyle(
+                        style: const TextStyle(
                           color: Colors.black87,
                           fontWeight: FontWeight.w500,
+                          decoration: TextDecoration.underline,
                         ),
+                        recognizer: TapGestureRecognizer()
+                          ..onTap = () => _showTermsAndPrivacy(context),
                       ),
-                      TextSpan(text: ', '),
+                      const TextSpan(text: ', '),
                       TextSpan(
                         text: 'Privacy Policy',
-                        style: TextStyle(
+                        style: const TextStyle(
                           color: Colors.black87,
                           fontWeight: FontWeight.w500,
+                          decoration: TextDecoration.underline,
                         ),
+                        recognizer: TapGestureRecognizer()
+                          ..onTap = () => _showTermsAndPrivacy(context),
                       ),
-                      TextSpan(text: ', and '),
+                      const TextSpan(text: ', and '),
                       TextSpan(
                         text: 'Cookie Use',
-                        style: TextStyle(
+                        style: const TextStyle(
                           color: Colors.black87,
                           fontWeight: FontWeight.w500,
+                          decoration: TextDecoration.underline,
                         ),
+                        recognizer: TapGestureRecognizer()
+                          ..onTap = () => _showTermsAndPrivacy(context),
                       ),
                     ],
                   ),
                 ),
                 const SizedBox(height: 24),
 
-                // Create Account button with loading state
                 ElevatedButton(
                   onPressed: _isLoading ? null : _register,
                   style: ElevatedButton.styleFrom(
@@ -376,9 +564,41 @@ class _SignUpPageState extends State<SignUpPage> {
                           style: TextStyle(fontSize: 16),
                         ),
                 ),
-                const SizedBox(height: 24),
+                const SizedBox(height: 16),
 
-                // Login link for existing users
+                const Row(
+                  children: [
+                    Expanded(child: Divider()),
+                    Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 16),
+                      child: Text(
+                        'or',
+                        style: TextStyle(color: Colors.grey),
+                      ),
+                    ),
+                    Expanded(child: Divider()),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                // Google Sign In Button
+                ElevatedButton.icon(
+                  onPressed: _isLoading ? null : _signInWithGoogle,
+                  icon: Image.asset(
+                    'assets/images/google_logo.png',
+                    height: 24,
+                  ),
+                  label: const Text('Continue with Google'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.white,
+                    foregroundColor: Colors.black87,
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      side: BorderSide(color: Colors.grey[300]!),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 30),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
@@ -400,7 +620,6 @@ class _SignUpPageState extends State<SignUpPage> {
                     ),
                   ],
                 ),
-                const SizedBox(height: 16),
               ],
             ),
           ),

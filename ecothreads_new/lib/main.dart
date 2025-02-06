@@ -1,4 +1,3 @@
-// Import required Flutter and Firebase packages
 import 'package:ecothreads/pages/settings_page.dart';
 import 'pages/editprofile_page.dart';
 import 'pages/messagedonor.dart';
@@ -24,22 +23,13 @@ import 'pages/messagedonor.dart';
 
 // Initialize Firebase and run the app
 Future<void> main() async {
-  // Ensure Flutter bindings are initialized
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Initialize Firebase with configuration
-  await Firebase.initializeApp(
-      options: FirebaseOptions(
-    apiKey: 'AIzaSyAuWA5wOuYtgUj7oAl0uBc5ziCDqy3zwhc',
-    appId: '1:688046774938:android:51d354f0ff844ca47e1d23',
-    messagingSenderId: '688046774938',
-    projectId: 'ecothreads-b1d6e',
-    storageBucket: 'ecothreads-b1d6e.appspot.com',
-    authDomain: 'ecothreads-b1d6e.firebaseapp.com',
-    measurementId: 'G-PFVCYKNXBD',
-  ));
+  // Check if Firebase is already initialized
+  if (Firebase.apps.isEmpty) {
+    await Firebase.initializeApp();
+  }
 
-  // Run the app with CartProvider for state management
   runApp(
     ChangeNotifierProvider(
       create: (_) => CartProvider(),
