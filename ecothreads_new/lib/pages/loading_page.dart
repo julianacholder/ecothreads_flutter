@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 
-// StatefulWidget for displaying a loading screen with logo and progress indicator
 class LoadingPage extends StatefulWidget {
   const LoadingPage({super.key});
 
@@ -8,65 +7,79 @@ class LoadingPage extends StatefulWidget {
   State<LoadingPage> createState() => _LoadingPageState();
 }
 
-class _LoadingPageState extends State<LoadingPage> {
+class _LoadingPageState extends State<LoadingPage>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _scaleAnimation;
+
   @override
   void initState() {
     super.initState();
-    // Use addPostFrameCallback to ensure the widget is fully built
-    // before starting navigation timer. This prevents potential
-    // issues with context usage during widget initialization
+
+    // Initialize animation controller
+    _controller = AnimationController(
+      duration: const Duration(milliseconds: 1500),
+      vsync: this,
+    );
+
+    // Create a curved animation for smooth breathing effect
+    _scaleAnimation = TweenSequence<double>([
+      TweenSequenceItem(
+        tween: Tween<double>(begin: 1.0, end: 0.85)
+            .chain(CurveTween(curve: Curves.easeInOut)),
+        weight: 50,
+      ),
+      TweenSequenceItem(
+        tween: Tween<double>(begin: 0.85, end: 1.0)
+            .chain(CurveTween(curve: Curves.easeInOut)),
+        weight: 50,
+      ),
+    ]).animate(_controller);
+
+    // Set animation to repeat
+    _controller.repeat();
+
+    // Setup navigation
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _navigateToOnboarding();
     });
   }
 
-  // Delayed navigation to onboarding screen
   Future<void> _navigateToOnboarding() async {
-    // Wait for 3 seconds to show loading animation
     await Future.delayed(const Duration(seconds: 3));
-    // Check if widget is still mounted to prevent navigation
-    // after widget disposal
     if (!mounted) return;
-
-    // Replace current route with onboarding page
-    // using pushReplacementNamed to prevent back navigation
     Navigator.of(context).pushReplacementNamed('/onboarding');
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      // Set background color to brand green
       backgroundColor: const Color(0xFF16A637),
       body: Stack(
         children: [
-          // Center logo in the middle of the screen
           Center(
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                // Display app logo with fixed dimensions
-                Image.asset(
-                  'assets/images/loadinglogo.png',
-                  height: 250,
-                  width: 350,
-                ),
-              ],
-            ),
-          ),
-          // Position loading indicator at bottom of screen
-          const Positioned(
-            bottom: 40, // Distance from bottom
-            left: 0,
-            right: 0,
-            child: Column(
-              children: [
-                Center(
-                  child: CircularProgressIndicator(
-                    // White color for progress indicator
-                    valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                    strokeWidth: 5, // Thickness of progress indicator
-                  ),
+                // Animated logo
+                AnimatedBuilder(
+                  animation: _scaleAnimation,
+                  builder: (context, child) {
+                    return Transform.scale(
+                      scale: _scaleAnimation.value,
+                      child: Image.asset(
+                        'assets/images/loadinglogo.png',
+                        height: 250,
+                        width: 350,
+                      ),
+                    );
+                  },
                 ),
               ],
             ),

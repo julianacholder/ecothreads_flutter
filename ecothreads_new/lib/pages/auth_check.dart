@@ -12,6 +12,8 @@ class AuthCheck extends StatelessWidget {
   const AuthCheck({super.key});
 
   Future<bool> _hasSeenOnboarding() async {
+    // Add artificial delay to ensure minimum loading time
+    await Future.delayed(const Duration(milliseconds: 1000));
     final prefs = await SharedPreferences.getInstance();
     return prefs.getBool('seenOnboarding') ?? false;
   }
@@ -32,9 +34,14 @@ class AuthCheck extends StatelessWidget {
         return StreamBuilder<User?>(
           stream: FirebaseAuth.instance.authStateChanges(),
           builder: (context, snapshot) {
+            // Use Future.delayed to ensure minimum loading time
             if (snapshot.connectionState == ConnectionState.waiting) {
-              return const LoadingPage();
+              return FutureBuilder(
+                future: Future.delayed(const Duration(milliseconds: 500)),
+                builder: (context, _) => const LoadingPage(),
+              );
             }
+
             final user = snapshot.data;
             if (user == null) {
               return const LoginPage();
