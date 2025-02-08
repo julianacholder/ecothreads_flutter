@@ -20,6 +20,7 @@ import 'auth_service.dart';
 import '../pages/card_provider.dart';
 import 'package:provider/provider.dart';
 import 'pages/messagedonor.dart';
+import './pages/auth_check.dart'; // Import the AuthCheck widget
 
 // Initialize Firebase and run the app
 Future<void> main() async {
@@ -53,7 +54,7 @@ class MyApp extends StatelessWidget {
         textTheme: GoogleFonts.nunitoSansTextTheme(),
         primaryTextTheme: GoogleFonts.nunitoSansTextTheme(),
       ),
-      home: const LoadingPage(),
+      home: const AuthCheck(), // Use AuthCheck as the home widget
       // Handle dynamic route generation for main screen with tab index
       onGenerateRoute: (settings) {
         if (settings.name == '/main') {
