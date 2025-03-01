@@ -59,6 +59,7 @@ class _HomePageState extends State<HomePage> {
   }
 
   // Fetch available items from both donations and clothing collections
+  // Updated method to fetch available items with donor information
   Future<void> _loadItems() async {
     try {
       setState(() => _isLoading = true);
@@ -76,8 +77,15 @@ class _HomePageState extends State<HomePage> {
       List<Map<String, dynamic>> items = [];
 
       // Process donation items
+      // Process donation items
       for (var doc in donationsSnapshot.docs) {
         final data = doc.data() as Map<String, dynamic>;
+
+        // Instead of fetching donor info from the users collection,
+        // use the data already present in the donation document.
+        final String userFullName = data['userFullName'] ?? 'Anonymous';
+        final String? userProfileImage = data['userProfileImage'];
+
         items.add({
           'id': doc.id,
           'name': data['itemName'] ?? 'Unnamed Item',
@@ -86,13 +94,38 @@ class _HomePageState extends State<HomePage> {
           'category': data['category'] ?? 'All Items',
           'condition': data['condition'] ?? 'New',
           'isManual': false,
-          'description': data['description'] ?? 'New Clothes'
+          'description': data['description'] ?? 'New Clothes',
+          'size': data['size'] ?? 'N/A',
+          'userId': data['userId'],
+          'userFullName': userFullName,
+          'userProfileImage': userProfileImage,
         });
       }
 
       // Process clothing items
       for (var doc in clothingSnapshot.docs) {
         final data = doc.data() as Map<String, dynamic>;
+
+        // Get information about who added this clothing item
+        String userFullName = 'Store Item';
+        String? userProfileImage;
+
+        if (data['addedBy'] != null) {
+          try {
+            DocumentSnapshot userDoc =
+                await _firestore.collection('users').doc(data['addedBy']).get();
+
+            if (userDoc.exists) {
+              Map<String, dynamic> userData =
+                  userDoc.data() as Map<String, dynamic>;
+              userFullName = userData['fullName'] ?? 'Store Admin';
+              userProfileImage = userData['profileImageUrl'];
+            }
+          } catch (e) {
+            print('Error fetching admin info: $e');
+          }
+        }
+
         items.add({
           'id': doc.id,
           'name': data['itemName'] ?? 'Unnamed Item',
@@ -101,7 +134,11 @@ class _HomePageState extends State<HomePage> {
           'category': data['category'] ?? 'All Items',
           'condition': data['condition'] ?? 'New',
           'isManual': true,
-          'description': data['description'] ?? 'New Clothes'
+          'description': data['description'] ?? 'New Clothes',
+          'size': data['size'] ?? 'N/A',
+          'userId': data['addedBy'],
+          'userFullName': userFullName,
+          'userProfileImage': userProfileImage,
         });
       }
 

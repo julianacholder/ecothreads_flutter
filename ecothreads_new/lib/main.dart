@@ -1,4 +1,5 @@
 import 'package:ecothreads/pages/settings_page.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'pages/editprofile_page.dart';
 import 'pages/messagedonor.dart';
 import 'package:flutter/material.dart';
@@ -23,12 +24,26 @@ import 'pages/messagedonor.dart';
 import './pages/auth_check.dart'; // Import the AuthCheck widget
 
 // Initialize Firebase and run the app
+import 'package:firebase_app_check/firebase_app_check.dart';
+import 'package:flutter/foundation.dart';
+
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   // Check if Firebase is already initialized
   if (Firebase.apps.isEmpty) {
     await Firebase.initializeApp();
+  }
+
+  // Initialize App Check
+  if (kDebugMode) {
+    await FirebaseAppCheck.instance.activate(
+      androidProvider: AndroidProvider.debug,
+    );
+  } else {
+    await FirebaseAppCheck.instance.activate(
+      androidProvider: AndroidProvider.playIntegrity,
+    );
   }
 
   runApp(
@@ -168,7 +183,88 @@ class _MainScreenState extends State<MainScreen> {
   }
 
   // Helper method to build custom navigation icons with selection indicators
+// Update your _buildIcon method in MainScreen to handle message notifications
+// Replace your current _buildIcon method with this one:
+
   Widget _buildIcon(IconData icon, bool isSelected) {
+    // Special handling for message icon
+    if (icon == Icons.message_outlined) {
+      final currentUser = FirebaseAuth.instance.currentUser;
+
+      // If user is not logged in, show regular icon
+      if (currentUser == null) {
+        return _buildRegularIcon(icon, isSelected);
+      }
+
+      // If user is logged in, show icon with potential notification badge
+      return StreamBuilder<QuerySnapshot>(
+        stream: FirebaseFirestore.instance
+            .collection('chats')
+            .where('participants', arrayContains: currentUser.uid)
+            .where('hasUnreadMessages', isEqualTo: true)
+            .snapshots(),
+        builder: (context, snapshot) {
+          // Handle errors and loading states
+          if (snapshot.hasError || !snapshot.hasData) {
+            return _buildRegularIcon(icon, isSelected);
+          }
+
+          int unreadCount = 0;
+
+          // Only count messages where the current user is not the sender
+          for (var doc in snapshot.data!.docs) {
+            final data = doc.data() as Map<String, dynamic>;
+            if ((data['lastSenderId'] ?? '') != currentUser.uid) {
+              unreadCount++;
+            }
+          }
+
+          // If no unread messages, show regular icon
+          if (unreadCount == 0) {
+            return _buildRegularIcon(icon, isSelected);
+          }
+
+          // Otherwise, show icon with badge
+          return Stack(
+            children: [
+              _buildRegularIcon(icon, isSelected),
+              // Position the badge in the top-right corner
+              Positioned(
+                right: 0,
+                top: 5,
+                child: Container(
+                  padding: EdgeInsets.all(4),
+                  decoration: BoxDecoration(
+                    color: Colors.red,
+                    shape: BoxShape.circle,
+                  ),
+                  constraints: BoxConstraints(
+                    minWidth: 16,
+                    minHeight: 16,
+                  ),
+                  child: Text(
+                    unreadCount > 9 ? '9+' : unreadCount.toString(),
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+              ),
+            ],
+          );
+        },
+      );
+    }
+
+    // For non-message icons, use the regular style
+    return _buildRegularIcon(icon, isSelected);
+  }
+
+// Add this helper method to keep your original icon style
+  Widget _buildRegularIcon(IconData icon, bool isSelected) {
     return Container(
       decoration: BoxDecoration(
         shape: BoxShape.circle,

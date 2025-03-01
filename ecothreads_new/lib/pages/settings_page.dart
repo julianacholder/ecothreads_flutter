@@ -23,12 +23,16 @@ class _SettingsPageState extends State<SettingsPage> {
   final TextEditingController _bioController = TextEditingController();
   final TextEditingController _locationController = TextEditingController();
   String? _profileImageUrl;
+  String? _coverImageUrl;
   bool _isPrivate = false;
+
+  final int _maxBioWords = 50; // Maximum allowed words in bio
 
   @override
   void initState() {
     super.initState();
     _loadUserData();
+    _bioController.addListener(_onBioChanged);
   }
 
   @override
@@ -38,6 +42,19 @@ class _SettingsPageState extends State<SettingsPage> {
     _bioController.dispose();
     _locationController.dispose();
     super.dispose();
+  }
+
+  void _onBioChanged() {
+    // Force refresh to update word count
+    setState(() {});
+  }
+
+  int _getWordCount(String text) {
+    return text
+        .trim()
+        .split(RegExp(r'\s+'))
+        .where((word) => word.isNotEmpty)
+        .length;
   }
 
   Future<void> _loadUserData() async {
@@ -52,6 +69,7 @@ class _SettingsPageState extends State<SettingsPage> {
             _bioController.text = userData.data()?['bio'] ?? '';
             _locationController.text = userData.data()?['location'] ?? '';
             _profileImageUrl = userData.data()?['profileImageUrl'];
+            _coverImageUrl = userData.data()?['coverImageUrl'];
             _isPrivate = userData.data()?['isPrivate'] ?? false;
           });
         }
@@ -61,7 +79,7 @@ class _SettingsPageState extends State<SettingsPage> {
     }
   }
 
-  Future<void> _uploadProfileImage() async {
+  Future<void> _uploadImage(bool isProfileImage) async {
     try {
       setState(() => _isLoading = true);
 
@@ -77,20 +95,18 @@ class _SettingsPageState extends State<SettingsPage> {
       }
 
       final File imageFile = File(pickedFile.path);
+      final String imageType = isProfileImage ? 'profile' : 'cover';
 
-      // Create storage reference
       final storageInstance = FirebaseStorage.instanceFor(
           bucket: 'ecothreads-b1d6e.firebasestorage.app');
 
-      // Create the file reference with timestamp
       final fileRef = storageInstance
           .ref()
           .child('images')
-          .child('profile_${DateTime.now().millisecondsSinceEpoch}.jpg');
+          .child('${imageType}_${DateTime.now().millisecondsSinceEpoch}.jpg');
 
       print('Attempting upload to: ${fileRef.fullPath}');
 
-      // Upload file
       final uploadTask = await fileRef.putFile(imageFile);
       print('Upload completed with state: ${uploadTask.state}');
 
@@ -98,31 +114,34 @@ class _SettingsPageState extends State<SettingsPage> {
         final downloadUrl = await fileRef.getDownloadURL();
         print('Got download URL: $downloadUrl');
 
-        // Update Firestore
         await _firestore.collection('users').doc(user!.uid).set({
-          'profileImageUrl': downloadUrl,
+          isProfileImage ? 'profileImageUrl' : 'coverImageUrl': downloadUrl,
         }, SetOptions(merge: true));
 
-        // Update local state
         setState(() {
-          _profileImageUrl = downloadUrl;
+          if (isProfileImage) {
+            _profileImageUrl = downloadUrl;
+          } else {
+            _coverImageUrl = downloadUrl;
+          }
         });
 
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Profile picture updated successfully'),
+            SnackBar(
+              content: Text(
+                  '${isProfileImage ? 'Profile' : 'Cover'} picture updated successfully'),
               backgroundColor: Colors.green,
             ),
           );
         }
       }
     } catch (e) {
-      print('Error uploading profile image: $e');
+      print('Error uploading image: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Failed to upload profile picture: ${e.toString()}'),
+            content: Text('Failed to upload image: ${e.toString()}'),
             backgroundColor: Colors.red,
           ),
         );
@@ -138,6 +157,10 @@ class _SettingsPageState extends State<SettingsPage> {
     try {
       setState(() => _isLoading = true);
 
+      if (_getWordCount(_bioController.text) > _maxBioWords) {
+        throw Exception('Bio exceeds maximum word limit');
+      }
+
       await _firestore.collection('users').doc(user!.uid).update({
         'fullName': _nameController.text.trim(),
         'username': _usernameController.text.trim(),
@@ -151,7 +174,7 @@ class _SettingsPageState extends State<SettingsPage> {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Profile updated successfully')),
         );
-        Navigator.pop(context); // Return to previous screen
+        Navigator.pop(context);
       }
     } catch (e) {
       print('Error saving profile: $e');
@@ -180,9 +203,7 @@ class _SettingsPageState extends State<SettingsPage> {
                 child: SizedBox(
                   width: 20,
                   height: 20,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                  ),
+                  child: CircularProgressIndicator(strokeWidth: 2),
                 ),
               ),
             )
@@ -209,7 +230,7 @@ class _SettingsPageState extends State<SettingsPage> {
                   alignment: Alignment.center,
                   padding: const EdgeInsets.symmetric(vertical: 24),
                   child: GestureDetector(
-                    onTap: _isLoading ? null : _uploadProfileImage,
+                    onTap: _isLoading ? null : () => _uploadImage(true),
                     child: Stack(
                       children: [
                         Container(
@@ -253,21 +274,25 @@ class _SettingsPageState extends State<SettingsPage> {
                     ),
                   ),
                 ),
-                const Text(
-                  'Add profile photo',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    color: Colors.black87,
-                  ),
-                ),
-                const SizedBox(height: 24),
 
                 // Profile Information Section
-                _buildTextField('Name', 'Enter your name', _nameController,
-                    enabled: false),
-                _buildTextField('Username', 'Username', _usernameController,
-                    enabled: false),
-                _buildTextField('Biography', 'Add Bio', _bioController),
+                _buildTextField(
+                  'Name',
+                  'Enter your name',
+                  _nameController,
+                ),
+                _buildTextField(
+                  'Username',
+                  'Username',
+                  _usernameController,
+                ),
+                _buildTextField(
+                  'Biography',
+                  'Add Bio',
+                  _bioController,
+                  maxWords: _maxBioWords,
+                  currentWords: _getWordCount(_bioController.text),
+                ),
                 _buildTextField('Location', 'Location', _locationController),
                 const Divider(height: 32),
 
@@ -306,55 +331,57 @@ class _SettingsPageState extends State<SettingsPage> {
               ],
             ),
           ),
-
-          // Bottom Navigation Bar
-          // Container(
-          //   padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 24),
-          //   decoration: BoxDecoration(
-          //     color: Colors.black87,
-          //     borderRadius: BorderRadius.circular(32),
-          //   ),
-          //   margin: const EdgeInsets.all(16),
-          //   child: const Row(
-          //     mainAxisAlignment: MainAxisAlignment.spaceAround,
-          //     children: [
-          //       Icon(Icons.home, color: Colors.white),
-          //       Icon(Icons.shopping_bag, color: Colors.white),
-          //       Icon(Icons.add_circle_outline, color: Colors.white, size: 32),
-          //       Icon(Icons.chat_bubble_outline, color: Colors.white),
-          //       Icon(Icons.person_outline, color: Colors.white),
-          //     ],
-          //   ),
-          // ),
         ],
       ),
     );
   }
 
   Widget _buildTextField(
-      String label, String hint, TextEditingController controller,
-      {bool enabled = true}) {
+    String label,
+    String hint,
+    TextEditingController controller, {
+    bool enabled = true,
+    int? maxWords,
+    int? currentWords,
+  }) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            label,
-            style: const TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.w500,
-            ),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                label,
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              if (maxWords != null)
+                Text(
+                  '$currentWords/$maxWords words',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: currentWords! > maxWords ? Colors.red : Colors.grey,
+                  ),
+                ),
+            ],
           ),
           const SizedBox(height: 8),
           TextField(
             controller: controller,
             enabled: enabled,
+            maxLines: label == 'Biography' ? 3 : 1,
             decoration: InputDecoration(
               hintText: hint,
               hintStyle: TextStyle(color: Colors.grey[400]),
               border: const UnderlineInputBorder(),
               contentPadding: const EdgeInsets.symmetric(vertical: 8),
+              errorText: maxWords != null && currentWords! > maxWords
+                  ? 'Bio cannot exceed $maxWords words'
+                  : null,
             ),
           ),
         ],
@@ -449,7 +476,7 @@ class _SettingsPageState extends State<SettingsPage> {
                 ),
                 const SizedBox(height: 16),
                 const Text(
-                  'Logout?',
+                  'Logout',
                   style: TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.bold,

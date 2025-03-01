@@ -15,45 +15,72 @@ class ProductPage extends StatelessWidget {
   const ProductPage({Key? key, required this.item}) : super(key: key);
 
   // Initialize chat with the donor in Firestore
+  // Make sure your _startChat method is being used:
+  // Replace your _startChat method in ProductPage with this:
+
   void _startChat(BuildContext context) async {
     final currentUser = FirebaseAuth.instance.currentUser;
-    if (currentUser == null) return;
+    if (currentUser == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Please log in to message the donor')),
+      );
+      return;
+    }
 
     final donorId = item['userId'];
-    if (donorId == null) return;
+    if (donorId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Cannot identify the donor')),
+      );
+      return;
+    }
 
     try {
       // Create a unique chat ID combining user and donor IDs
       final chatId = '${currentUser.uid}_$donorId';
       final firestore = FirebaseFirestore.instance;
 
-      // Create or update chat document in Firestore
-      await firestore.collection('chats').doc(chatId).set({
-        'participants': [currentUser.uid, donorId],
-        'lastMessage': 'Chat started',
-        'lastMessageTime': FieldValue.serverTimestamp(),
-        'itemId': item['id'],
-        'itemName': item['name'],
-        'itemImage': item['image'],
-      }, SetOptions(merge: true));
+      // Check if chat already exists
+      final chatDoc = await firestore.collection('chats').doc(chatId).get();
 
-      // Navigate to chat screen if context is still valid
+      if (!chatDoc.exists) {
+        // Create new chat document if it doesn't exist
+        await firestore.collection('chats').doc(chatId).set({
+          'participants': [currentUser.uid, donorId],
+          'lastMessage': 'Chat started',
+          'lastMessageTime': FieldValue.serverTimestamp(),
+          'lastSenderId': currentUser.uid,
+          'itemId': item['id'],
+          'itemName': item['name'],
+          'itemImage': item['image'],
+          'hasUnreadMessages': false,
+          'unreadCount': 0,
+        });
+      }
+
+      // Navigate to MessageDonor with the correct arguments
       if (context.mounted) {
-        Navigator.pushNamed(
+        Navigator.push(
           context,
-          '/message',
-          arguments: {
-            'chatId': chatId,
-            'otherUserId': donorId,
-            'otherUserName': item['userFullName'] ?? 'User',
-            'itemName': item['name'],
-          },
+          MaterialPageRoute(
+            builder: (context) => MessageDonor(
+              chatId: chatId,
+              donorId: donorId,
+              donorName: item['userFullName'] ?? 'Donor',
+              itemName: item['name'] ?? 'Item',
+            ),
+          ),
         );
       }
     } catch (e) {
       print('Error starting chat: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error starting chat: $e')),
+      );
     }
   }
+
+// Also update your Message Donor button in the build method:
 
   // Add item to shopping cart using CartProvider
   void _addToCart(BuildContext context) {
@@ -111,7 +138,7 @@ class ProductPage extends StatelessWidget {
       // Scrollable content area
       body: SingleChildScrollView(
         child: Padding(
-          padding: const EdgeInsets.only(left: 16.0, right: 16, top: 50),
+          padding: const EdgeInsets.only(left: 16.0, right: 16, top: 15),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -122,11 +149,11 @@ class ProductPage extends StatelessWidget {
                   item['image'] ?? '',
                   fit: BoxFit.cover,
                   width: double.infinity,
-                  height: 350,
+                  height: 400,
                   errorBuilder: (context, error, stackTrace) {
                     return Container(
                       width: double.infinity,
-                      height: 350,
+                      height: 400,
                       color: Colors.grey[300],
                       child: const Icon(Icons.error),
                     );
@@ -215,7 +242,7 @@ class ProductPage extends StatelessWidget {
                   ),
                 ],
               ),
-              const SizedBox(height: 24),
+              const SizedBox(height: 30),
               // Action buttons for messaging donor and adding to cart
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceEvenly,
@@ -224,31 +251,24 @@ class ProductPage extends StatelessWidget {
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.black,
                       padding: const EdgeInsets.symmetric(
-                          horizontal: 16, vertical: 12),
+                          horizontal: 18, vertical: 12),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(20),
                       ),
                     ),
-                    onPressed: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => MessageDonor(),
-                        ),
-                      );
-                    },
+                    onPressed: () => _startChat(context),
                     icon: const Icon(Icons.chat_bubble_outline,
                         color: Colors.white),
                     label: const Text(
                       'Message donor',
-                      style: TextStyle(color: Colors.white),
+                      style: TextStyle(color: Colors.white, fontSize: 16),
                     ),
                   ),
                   ElevatedButton.icon(
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.black,
                       padding: const EdgeInsets.symmetric(
-                          horizontal: 16, vertical: 12),
+                          horizontal: 18, vertical: 12),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(20),
                       ),
@@ -258,7 +278,7 @@ class ProductPage extends StatelessWidget {
                         color: Colors.white),
                     label: const Text(
                       'Add to Cart',
-                      style: TextStyle(color: Colors.white),
+                      style: TextStyle(color: Colors.white, fontSize: 16),
                     ),
                   ),
                 ],

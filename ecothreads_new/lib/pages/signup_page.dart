@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import '../auth_service.dart';
 import 'package:flutter/gestures.dart';
+import '../models/email_verification_service.dart';
+import './email_verification_screen.dart';
 
 // At the top of your file, create a constant for the text
 const String termsAndPrivacyText = '''
@@ -258,62 +260,79 @@ class _SignUpPageState extends State<SignUpPage> {
     }
 
     try {
-      User? user =
-          await _authService.registerWithEmailPassword(email, password);
+      // Check if the email is already registered
+      final userSnapshot = await FirebaseFirestore.instance
+          .collection('users')
+          .where('email', isEqualTo: email)
+          .get();
 
-      if (user != null) {
-        bool firestoreSuccess = await _storeUserDataWithRetry(
-          user,
-          fullName,
-          username,
-          email,
-        );
-
-        if (firestoreSuccess) {
-          if (mounted) {
-            Navigator.pushNamedAndRemoveUntil(
-              context,
-              '/main',
-              (route) => false,
-              arguments: 4,
-            );
-          }
-        } else {
-          await user.delete();
-          setState(() {
-            errorMessage = 'Failed to create account. Please try again later.';
-          });
-        }
-      }
-    } on FirebaseAuthException catch (e) {
-      setState(() {
-        errorMessage = _getFirebaseAuthErrorMessage(e);
-      });
-    } catch (e) {
-      setState(() {
-        errorMessage = 'An unexpected error occurred. Please try again.';
-      });
-    } finally {
-      if (mounted) {
+      if (userSnapshot.docs.isNotEmpty) {
         setState(() {
+          errorMessage =
+              'This email is already registered. Please use a different email.';
           _isLoading = false;
         });
+        return;
       }
+
+      final verificationService = EmailVerificationService();
+
+      // ✅ Ensure OTP is only sent if email is NOT registered
+      bool otpSent = await verificationService.sendOTP(email);
+
+      if (!otpSent) {
+        setState(() {
+          errorMessage = 'Failed to send OTP. Please try again.';
+          _isLoading = false;
+        });
+        return;
+      }
+
+      // ✅ Navigate to OTP verification screen
+      if (mounted) {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => EmailVerificationScreen(
+              email: email,
+              password: password,
+              fullName: fullName,
+              username: username,
+            ),
+          ),
+        );
+      }
+    } catch (e) {
+      print("❌ Registration Error: $e");
+      setState(() {
+        errorMessage = e.toString();
+        _isLoading = false;
+      });
     }
   }
 
-  String _getFirebaseAuthErrorMessage(FirebaseAuthException e) {
-    switch (e.code) {
-      case 'email-already-in-use':
-        return 'This email is already registered. Please use a different email.';
-      case 'weak-password':
-        return 'The password provided is too weak.';
-      case 'invalid-email':
-        return 'The email address is invalid.';
-      default:
-        return e.message ?? 'An error occurred during registration.';
-    }
-  }
+  // String _getFirebaseAuthErrorMessage(FirebaseAuthException e) {
+  //   switch (e.code) {
+  //     case 'email-already-in-use':
+  //       return 'This email is already registered. Please use a different email.';
+  //     case 'invalid-email':
+  //       return 'The email address is invalid. Please enter a valid email.';
+  //     case 'operation-not-allowed':
+  //       return 'Email/password accounts are not enabled. Please contact support.';
+  //     case 'weak-password':
+  //       return 'The password is too weak. Please use a stronger password.';
+  //     case 'network-request-failed':
+  //       return 'Network error. Please check your internet connection.';
+  //     case 'too-many-requests':
+  //       return 'Too many attempts. Please try again later.';
+  //     case 'user-disabled':
+  //       return 'This account has been disabled. Please contact support.';
+  //     case 'requires-recent-login':
+  //       return 'This operation is sensitive and requires recent authentication. Please log in again.';
+  //     default:
+  //       return e.message ?? 'An unexpected error occurred. Please try again.';
+  //   }
+  // }
 
   String getValidationErrorMessage(
       String fullName, String username, String email, String password) {
@@ -411,8 +430,9 @@ class _SignUpPageState extends State<SignUpPage> {
                     fontSize: 16,
                   ),
                 ),
-
+                const SizedBox(height: 12),
                 _errorMessage(),
+                const SizedBox(height: 20),
 
                 TextField(
                   controller: _controllerFullName,
@@ -495,7 +515,7 @@ class _SignUpPageState extends State<SignUpPage> {
                     ),
                   ),
                 ),
-                const SizedBox(height: 24),
+                const SizedBox(height: 8),
 
                 RichText(
                   text: TextSpan(

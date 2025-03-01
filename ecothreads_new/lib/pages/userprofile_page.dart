@@ -8,7 +8,6 @@ import 'package:firebase_storage/firebase_storage.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:io';
 
-// Main widget for user profile screen
 class UserProfile extends StatefulWidget {
   const UserProfile({super.key});
 
@@ -16,7 +15,6 @@ class UserProfile extends StatefulWidget {
   State<UserProfile> createState() => _UserProfileState();
 }
 
-// Firebase instances for authentication, database, and storage
 class _UserProfileState extends State<UserProfile> {
   final user = FirebaseAuth.instance.currentUser;
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
@@ -25,7 +23,7 @@ class _UserProfileState extends State<UserProfile> {
 
   bool _isLoading = false;
 
-// Fetch user data including donations and points
+  // Fetch user data including donations and points
   Future<Map<String, dynamic>> getUserData() async {
     if (user != null) {
       try {
@@ -59,6 +57,63 @@ class _UserProfileState extends State<UserProfile> {
     return {};
   }
 
+  // Upload cover image to Firebase Storage
+  Future<void> _uploadCoverImage() async {
+    try {
+      setState(() => _isLoading = true);
+
+      final XFile? pickedFile = await _picker.pickImage(
+        source: ImageSource.gallery,
+        imageQuality: 85,
+      );
+
+      if (pickedFile == null) {
+        print('No image selected');
+        return;
+      }
+
+      final File imageFile = File(pickedFile.path);
+
+      final fileRef = _storage
+          .ref()
+          .child('images')
+          .child('cover_${DateTime.now().millisecondsSinceEpoch}.jpg');
+
+      final uploadTask = await fileRef.putFile(imageFile);
+
+      if (uploadTask.state == TaskState.success) {
+        final downloadUrl = await fileRef.getDownloadURL();
+
+        await _firestore.collection('users').doc(user!.uid).set({
+          'coverImageUrl': downloadUrl,
+          'lastUpdated': FieldValue.serverTimestamp(),
+        }, SetOptions(merge: true));
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Cover image updated successfully'),
+              backgroundColor: Colors.green,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      print('Upload error: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Upload failed: ${e.toString()}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
+  }
   // Show dialog to update listing status
 
   void _showStatusUpdateDialog(String listingId, String currentStatus) {
@@ -163,80 +218,7 @@ class _UserProfileState extends State<UserProfile> {
     );
   }
 
-  // Upload cover image to Firebase Storage
-
-  Future<void> _uploadCoverImage() async {
-    try {
-      setState(() => _isLoading = true);
-
-      final currentUser = FirebaseAuth.instance.currentUser;
-      if (currentUser == null) {
-        throw Exception('No authenticated user found');
-      }
-
-      final XFile? pickedFile = await _picker.pickImage(
-        source: ImageSource.gallery,
-        imageQuality: 85,
-      );
-
-      if (pickedFile == null) {
-        print('No image selected');
-        return;
-      }
-
-      final File imageFile = File(pickedFile.path);
-
-      final storageInstance = FirebaseStorage.instanceFor(
-          bucket: 'ecothreads-b1d6e.firebasestorage.app');
-
-      final fileRef = storageInstance
-          .ref()
-          .child('images')
-          .child('cover_${DateTime.now().millisecondsSinceEpoch}.jpg');
-
-      print('Attempting upload to: ${fileRef.fullPath}');
-
-      final uploadTask = await fileRef.putFile(imageFile);
-      print('Upload completed with state: ${uploadTask.state}');
-
-      if (uploadTask.state == TaskState.success) {
-        final downloadUrl = await fileRef.getDownloadURL();
-        print('Got download URL: $downloadUrl');
-
-        await FirebaseFirestore.instance
-            .collection('users')
-            .doc(currentUser.uid)
-            .set({
-          'coverImageUrl': downloadUrl,
-          'lastUpdated': FieldValue.serverTimestamp(),
-        }, SetOptions(merge: true));
-
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Cover image uploaded successfully'),
-              backgroundColor: Colors.green,
-            ),
-          );
-        }
-      }
-    } catch (e) {
-      print('Upload error: $e');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Upload failed: ${e.toString()}'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    } finally {
-      if (mounted) {
-        setState(() => _isLoading = false);
-      }
-    }
-  }
-
+  // Build a single listing item
   Widget _buildListingItem(Map<String, dynamic> listing) {
     return Container(
       decoration: BoxDecoration(
@@ -375,6 +357,7 @@ class _UserProfileState extends State<UserProfile> {
     );
   }
 
+  // Build an action button
   Widget _buildActionButton(String text) {
     return Container(
       width: 70,
@@ -396,6 +379,7 @@ class _UserProfileState extends State<UserProfile> {
     );
   }
 
+  // Build a stat column
   Widget _buildStatColumn(IconData icon, String value, String label) {
     return Column(
       children: [
@@ -430,6 +414,7 @@ class _UserProfileState extends State<UserProfile> {
     );
   }
 
+  // Get status color based on status
   Color _getStatusColor(String status) {
     switch (status.toLowerCase()) {
       case 'available':
@@ -469,45 +454,54 @@ class _UserProfileState extends State<UserProfile> {
                     Stack(
                       clipBehavior: Clip.none,
                       children: [
-                        // Cover Image
-                        GestureDetector(
-                          onTap: _isLoading ? null : _uploadCoverImage,
-                          child: Container(
-                            height: 230,
-                            width: double.infinity,
-                            decoration: BoxDecoration(
-                              color: Colors.grey[300],
-                              image: userData['coverImageUrl'] != null
-                                  ? DecorationImage(
-                                      image: NetworkImage(
-                                          userData['coverImageUrl']),
-                                      fit: BoxFit.cover,
-                                    )
-                                  : null,
+                        // Cover Image with Camera Icon
+                        Stack(
+                          children: [
+                            GestureDetector(
+                              onTap: _isLoading ? null : _uploadCoverImage,
+                              child: Container(
+                                height: 230,
+                                width: double.infinity,
+                                decoration: BoxDecoration(
+                                  color: Colors.grey[300],
+                                  image: userData['coverImageUrl'] != null
+                                      ? DecorationImage(
+                                          image: NetworkImage(
+                                              userData['coverImageUrl']),
+                                          fit: BoxFit.cover,
+                                        )
+                                      : null,
+                                ),
+                              ),
                             ),
-                            child: userData['coverImageUrl'] == null
-                                ? const Center(
-                                    child: Column(
-                                      mainAxisAlignment:
-                                          MainAxisAlignment.center,
-                                      children: [
-                                        Icon(Icons.add_photo_alternate,
-                                            size: 40, color: Colors.grey),
-                                        Text('Add Cover Image',
-                                            style:
-                                                TextStyle(color: Colors.grey)),
-                                      ],
-                                    ),
-                                  )
-                                : null,
-                          ),
+                            Positioned(
+                              bottom: 10,
+                              right: 15,
+                              child: GestureDetector(
+                                onTap: _uploadCoverImage,
+                                child: Container(
+                                  padding: const EdgeInsets.all(6),
+                                  decoration: const BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    color: Colors.black54,
+                                  ),
+                                  child: const Icon(
+                                    Icons.camera_alt,
+                                    color: Colors.white,
+                                    size: 22,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
+
                         // Profile image
                         Positioned(
                           bottom: -45,
                           left: 20,
                           child: GestureDetector(
-                            onTap: _isLoading ? null : _uploadCoverImage,
+                            onTap: _uploadCoverImage,
                             child: Container(
                               height: 105,
                               width: 105,
@@ -536,8 +530,6 @@ class _UserProfileState extends State<UserProfile> {
                       ],
                     ),
                     const SizedBox(height: 55),
-
-                    // Profile Info
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 16),
                       child: Column(
@@ -566,7 +558,6 @@ class _UserProfileState extends State<UserProfile> {
                             ),
                           ),
                           const SizedBox(height: 16),
-
                           // Action Buttons
                           SingleChildScrollView(
                             scrollDirection: Axis.horizontal,
@@ -582,7 +573,6 @@ class _UserProfileState extends State<UserProfile> {
                           ),
 
                           const SizedBox(height: 16),
-
                           // Update Profile Row
                           Row(
                             children: [
