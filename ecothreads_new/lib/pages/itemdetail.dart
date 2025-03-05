@@ -4,19 +4,109 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:provider/provider.dart';
+import 'package:cached_network_image/cached_network_image.dart';
+import 'package:shimmer/shimmer.dart';
 import '../pages/card_provider.dart';
 import 'checkout.dart';
+import 'donor_profile_page.dart';
+import '../models/cart_item.dart'; // Make sure this is the only CartItem import
 
-// StatelessWidget for displaying detailed product information
-class ProductPage extends StatelessWidget {
-  // Item data passed from the previous screen
+// StatefulWidget for displaying detailed product information
+class ProductPage extends StatefulWidget {
   final Map<String, dynamic> item;
-
   const ProductPage({Key? key, required this.item}) : super(key: key);
 
-  // Initialize chat with the donor in Firestore
-  // Make sure your _startChat method is being used:
-  // Replace your _startChat method in ProductPage with this:
+  @override
+  State<ProductPage> createState() => _ProductPageState();
+}
+
+class _ProductPageState extends State<ProductPage> {
+  bool isFavorite = false;
+  bool isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkIfFavorite();
+  }
+
+  Future<void> _checkIfFavorite() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      setState(() => isLoading = false);
+      return;
+    }
+
+    try {
+      final doc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .collection('favorites')
+          .doc(widget.item['id'])
+          .get();
+
+      setState(() {
+        isFavorite = doc.exists;
+        isLoading = false;
+      });
+    } catch (e) {
+      print('Error checking favorite status: $e');
+      setState(() => isLoading = false);
+    }
+  }
+
+  Future<void> _toggleFavorite() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please login to favorite items')),
+      );
+      return;
+    }
+
+    setState(() => isLoading = true);
+
+    try {
+      final favoriteRef = FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .collection('favorites')
+          .doc(widget.item['id']);
+
+      if (isFavorite) {
+        await favoriteRef.delete();
+      } else {
+        await favoriteRef.set({
+          'itemId': widget.item['id'],
+          'name': widget.item['name'],
+          'points': widget.item['points'],
+          'image': widget.item['image'],
+          'condition': widget.item['condition'],
+          'size': widget.item['size'],
+          'addedAt': FieldValue.serverTimestamp(),
+        });
+      }
+
+      setState(() {
+        isFavorite = !isFavorite;
+        isLoading = false;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+              isFavorite ? 'Added to favorites' : 'Removed from favorites'),
+          duration: const Duration(seconds: 1),
+        ),
+      );
+    } catch (e) {
+      print('Error toggling favorite: $e');
+      setState(() => isLoading = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Error updating favorites')),
+      );
+    }
+  }
 
   void _startChat(BuildContext context) async {
     final currentUser = FirebaseAuth.instance.currentUser;
@@ -27,7 +117,7 @@ class ProductPage extends StatelessWidget {
       return;
     }
 
-    final donorId = item['userId'];
+    final donorId = widget.item['userId'];
     if (donorId == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Cannot identify the donor')),
@@ -35,90 +125,64 @@ class ProductPage extends StatelessWidget {
       return;
     }
 
-    try {
-      // Create a unique chat ID combining user and donor IDs
-      final chatId = '${currentUser.uid}_$donorId';
-      final firestore = FirebaseFirestore.instance;
-
-      // Check if chat already exists
-      final chatDoc = await firestore.collection('chats').doc(chatId).get();
-
-      if (!chatDoc.exists) {
-        // Create new chat document if it doesn't exist
-        await firestore.collection('chats').doc(chatId).set({
-          'participants': [currentUser.uid, donorId],
-          'lastMessage': 'Chat started',
-          'lastMessageTime': FieldValue.serverTimestamp(),
-          'lastSenderId': currentUser.uid,
-          'itemId': item['id'],
-          'itemName': item['name'],
-          'itemImage': item['image'],
-          'hasUnreadMessages': false,
-          'unreadCount': 0,
-        });
-      }
-
-      // Navigate to MessageDonor with the correct arguments
-      if (context.mounted) {
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (context) => MessageDonor(
-              chatId: chatId,
-              donorId: donorId,
-              donorName: item['userFullName'] ?? 'Donor',
-              itemName: item['name'] ?? 'Item',
-            ),
+    if (context.mounted) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => MessageDonor(
+            chatId: null,
+            donorId: donorId,
+            donorName: widget.item['userFullName'] ?? 'Donor',
+            itemName: widget.item['name'] ?? 'Item',
+            itemId: widget.item['id'],
+            itemImage: widget.item['image'],
           ),
-        );
-      }
-    } catch (e) {
-      print('Error starting chat: $e');
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error starting chat: $e')),
+        ),
       );
     }
   }
 
-// Also update your Message Donor button in the build method:
-
-  // Add item to shopping cart using CartProvider
   void _addToCart(BuildContext context) {
-    final cartItem = CartItem(
-      name: item['name'] ?? 'Unnamed Item',
-      condition: item['condition'] ?? 'New',
-      points: item['points'] ?? 0,
-      size: item['size'] ?? 'N/A',
-      imageUrl: item['image'] ?? '',
-    );
+    try {
+      final int itemPoints =
+          int.tryParse(widget.item['points']?.toString() ?? '0') ?? 0;
 
-    // Add item to cart using provider
-    context.read<CartProvider>().addItem(cartItem);
+      final cartItem = CartItem(
+        name: widget.item['name']?.toString() ?? 'Unnamed Item',
+        condition: widget.item['condition']?.toString() ?? 'New',
+        points: itemPoints,
+        size: widget.item['size']?.toString() ?? 'N/A',
+        imageUrl: widget.item['image']?.toString() ?? '',
+      );
 
-    // Show success message with action to view cart
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: const Text('Item added to cart'),
-        action: SnackBarAction(
-          label: 'View Cart',
-          onPressed: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(builder: (context) => CheckoutPage()),
-            );
-          },
+      context.read<CartProvider>().addItem(cartItem);
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('Item added to cart'),
+          action: SnackBarAction(
+            label: 'View Cart',
+            onPressed: () => Navigator.pushNamed(context, '/checkout'),
+          ),
         ),
-      ),
-    );
+      );
+    } catch (e) {
+      print('Error adding to cart: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Could not add item to cart'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    print('Item data: $item');
+    print('Item data: ${widget.item}');
 
     return Scaffold(
       backgroundColor: Colors.white,
-      // Custom app bar with back button and favorite icon
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
@@ -128,46 +192,67 @@ class ProductPage extends StatelessWidget {
         ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.favorite_border, color: Colors.pink),
-            onPressed: () {
-              // TODO: Add favorite functionality
-            },
+            icon: Icon(
+              isFavorite ? Icons.favorite : Icons.favorite_border,
+              color: Colors.pink,
+            ),
+            onPressed: isLoading ? null : _toggleFavorite,
           ),
         ],
       ),
-      // Scrollable content area
       body: SingleChildScrollView(
         child: Padding(
           padding: const EdgeInsets.only(left: 16.0, right: 16, top: 15),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Product image with error handling
               ClipRRect(
                 borderRadius: BorderRadius.circular(16),
-                child: Image.network(
-                  item['image'] ?? '',
-                  fit: BoxFit.cover,
-                  width: double.infinity,
-                  height: 400,
-                  errorBuilder: (context, error, stackTrace) {
-                    return Container(
-                      width: double.infinity,
-                      height: 400,
-                      color: Colors.grey[300],
-                      child: const Icon(Icons.error),
-                    );
-                  },
+                child: AspectRatio(
+                  aspectRatio: 1.0,
+                  child: CachedNetworkImage(
+                    imageUrl: widget.item['image'] ?? '',
+                    fit: BoxFit.cover,
+                    placeholder: (context, url) => Container(
+                      color: Colors.grey[200],
+                      child: Center(
+                        child: CircularProgressIndicator(
+                          valueColor:
+                              AlwaysStoppedAnimation<Color>(Colors.grey[400]!),
+                          strokeWidth: 2,
+                        ),
+                      ),
+                    ),
+                    errorWidget: (context, url, error) => Container(
+                      color: Colors.grey[200],
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            Icons.image_not_supported_outlined,
+                            color: Colors.grey[400],
+                            size: 40,
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            'Image not available',
+                            style: TextStyle(
+                              color: Colors.grey[600],
+                              fontSize: 12,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
                 ),
               ),
               const SizedBox(height: 16),
-              // Product name
               Text(
-                item['name'] ?? 'Unnamed Item',
+                widget.item['name'] ?? 'Unnamed Item',
                 style:
                     const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
               ),
-              // Rating and condition
               Row(
                 children: [
                   Icon(Icons.star, color: Colors.yellow[700], size: 20),
@@ -176,19 +261,17 @@ class ProductPage extends StatelessWidget {
                     style: TextStyle(fontWeight: FontWeight.bold),
                   ),
                   Text(
-                    '(${item['condition'] ?? 'Unknown condition'})',
+                    '(${widget.item['condition'] ?? 'Unknown condition'})',
                     style: const TextStyle(color: Colors.blue),
                   ),
                 ],
               ),
               const SizedBox(height: 8),
-              // Product description
               Text(
-                item['description'] ?? "No description available",
+                widget.item['description'] ?? "No description available",
                 style: TextStyle(color: Colors.grey[600]),
               ),
               const SizedBox(height: 16),
-              // Size and price information
               Row(
                 children: [
                   const Text(
@@ -204,7 +287,7 @@ class ProductPage extends StatelessWidget {
                       borderRadius: BorderRadius.circular(20),
                     ),
                     child: Text(
-                      item['size'] ?? 'N/A',
+                      widget.item['size'] ?? 'N/A',
                       style: const TextStyle(
                           fontSize: 16, fontWeight: FontWeight.bold),
                     ),
@@ -215,35 +298,66 @@ class ProductPage extends StatelessWidget {
                     style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                   ),
                   Text(
-                    '${item['points'] ?? 0} points',
+                    '${widget.item['points'] ?? 0} points',
                     style: const TextStyle(
                         fontSize: 16, fontWeight: FontWeight.bold),
                   ),
                 ],
               ),
               const SizedBox(height: 16),
-              // Donor information
-              Row(
-                children: [
-                  CircleAvatar(
-                    backgroundImage: item['userProfileImage'] != null
-                        ? NetworkImage(item['userProfileImage'])
-                        : const AssetImage('assets/images/donor.png')
-                            as ImageProvider,
-                  ),
-                  const SizedBox(width: 8),
-                  const Text(
-                    'Donated by: ',
-                    style: TextStyle(color: Colors.grey),
-                  ),
-                  Text(
-                    item['userFullName'] ?? 'Lydia Vannie',
-                    style: const TextStyle(fontWeight: FontWeight.bold),
-                  ),
-                ],
+              GestureDetector(
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => DonorProfilePage(
+                        donorId: widget.item['userId'] ?? '',
+                        donorName: widget.item['userFullName'] ?? 'Anonymous',
+                      ),
+                    ),
+                  );
+                },
+                child: Row(
+                  children: [
+                    CircleAvatar(
+                      radius: 20,
+                      backgroundColor: Colors.grey[300],
+                      child: widget.item['userProfileImage'] != null
+                          ? ClipOval(
+                              child: CachedNetworkImage(
+                                imageUrl: widget.item['userProfileImage'],
+                                width: 40,
+                                height: 40,
+                                fit: BoxFit.cover,
+                                placeholder: (context, url) =>
+                                    Shimmer.fromColors(
+                                  baseColor: Colors.grey[300]!,
+                                  highlightColor: Colors.grey[100]!,
+                                  child: Container(color: Colors.white),
+                                ),
+                                errorWidget: (context, url, error) => Icon(
+                                  Icons.person,
+                                  color: Colors.grey[400],
+                                  size: 25,
+                                ),
+                              ),
+                            )
+                          : Icon(Icons.person,
+                              color: Colors.grey[400], size: 25),
+                    ),
+                    const SizedBox(width: 8),
+                    const Text('Donated by: ',
+                        style: TextStyle(color: Colors.grey)),
+                    Text(
+                      widget.item['userFullName'] ?? 'Anonymous',
+                      style: const TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                    const Spacer(),
+                    Icon(Icons.chevron_right, color: Colors.grey[400]),
+                  ],
+                ),
               ),
               const SizedBox(height: 30),
-              // Action buttons for messaging donor and adding to cart
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                 children: [
@@ -251,7 +365,7 @@ class ProductPage extends StatelessWidget {
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.black,
                       padding: const EdgeInsets.symmetric(
-                          horizontal: 18, vertical: 12),
+                          horizontal: 16, vertical: 12),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(20),
                       ),
@@ -261,7 +375,7 @@ class ProductPage extends StatelessWidget {
                         color: Colors.white),
                     label: const Text(
                       'Message donor',
-                      style: TextStyle(color: Colors.white, fontSize: 16),
+                      style: TextStyle(color: Colors.white),
                     ),
                   ),
                   ElevatedButton.icon(

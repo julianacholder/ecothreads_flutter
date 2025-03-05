@@ -2,6 +2,7 @@ import 'package:ecothreads/pages/settings_page.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'pages/editprofile_page.dart';
 import 'pages/messagedonor.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'pages/checkout.dart';
 import 'pages/donate_page.dart';
@@ -22,6 +23,7 @@ import '../pages/card_provider.dart';
 import 'package:provider/provider.dart';
 import 'pages/messagedonor.dart';
 import './pages/auth_check.dart'; // Import the AuthCheck widget
+import './models/cart_item.dart'; // Add this import
 
 // Initialize Firebase and run the app
 import 'package:firebase_app_check/firebase_app_check.dart';
@@ -136,173 +138,176 @@ class _MainScreenState extends State<MainScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       body: _pages[_selectedIndex],
-      extendBody: true,
-      // Custom styled bottom navigation bar
       bottomNavigationBar: Container(
-        margin: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 10.0),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(44),
-          child: BottomNavigationBar(
-            backgroundColor: AppColors.primarylight,
-            currentIndex: _selectedIndex,
-            onTap: _onItemTapped,
-            elevation: 8,
-            type: BottomNavigationBarType.fixed,
-            // Define navigation items with custom icons
-            items: <BottomNavigationBarItem>[
-              BottomNavigationBarItem(
-                icon: _buildIcon(Icons.home, _selectedIndex == 0),
-                label: '',
-              ),
-              BottomNavigationBarItem(
-                icon: _buildIcon(
-                    Icons.shopping_bag_outlined, _selectedIndex == 1),
-                label: '',
-              ),
-              BottomNavigationBarItem(
-                icon: _buildIcon(Icons.add, _selectedIndex == 2),
-                label: '',
-              ),
-              BottomNavigationBarItem(
-                icon: _buildIcon(Icons.message_outlined, _selectedIndex == 3),
-                label: '',
-              ),
-              BottomNavigationBarItem(
-                icon: _buildIcon(Icons.person, _selectedIndex == 4),
-                label: '',
-              ),
-            ],
-            selectedItemColor: Colors.white,
-            unselectedItemColor: Colors.white.withOpacity(0.5),
-            showUnselectedLabels: false,
-            showSelectedLabels: false,
+        decoration: BoxDecoration(
+          border: Border(
+            top: BorderSide(
+              color: Colors.grey.shade200,
+              width: 0.5,
+            ),
           ),
+        ),
+        child: BottomNavigationBar(
+          backgroundColor: Colors.white,
+          currentIndex: _selectedIndex,
+          onTap: _onItemTapped,
+          type: BottomNavigationBarType.fixed,
+          showSelectedLabels: false,
+          showUnselectedLabels: false,
+          selectedItemColor: Colors.black,
+          unselectedItemColor: Colors.grey,
+          items: [
+            BottomNavigationBarItem(
+              icon: Icon(
+                _selectedIndex == 0
+                    ? Icons.grid_view
+                    : Icons.grid_view_outlined,
+                size: 28,
+              ),
+              label: 'Home',
+            ),
+            BottomNavigationBarItem(
+              icon: Stack(
+                children: [
+                  Icon(
+                    _selectedIndex == 1
+                        ? Icons.local_mall
+                        : Icons.local_mall_outlined,
+                    size: 28,
+                  ),
+                  if (context.watch<CartProvider>().items.isNotEmpty)
+                    Positioned(
+                      right: 0,
+                      top: 0,
+                      child: Container(
+                        padding: EdgeInsets.all(4),
+                        decoration: BoxDecoration(
+                          color: Colors.red,
+                          shape: BoxShape.circle,
+                        ),
+                        constraints: BoxConstraints(
+                          minWidth: 16,
+                          minHeight: 16,
+                        ),
+                        child: Text(
+                          context.watch<CartProvider>().items.length.toString(),
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+              label: 'Cart',
+            ),
+            BottomNavigationBarItem(
+              icon: Container(
+                padding: EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color:
+                      _selectedIndex == 2 ? Colors.black : Colors.transparent,
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  Icons.add,
+                  size: 28,
+                  color: _selectedIndex == 2 ? Colors.white : Colors.black,
+                ),
+              ),
+              label: 'Donate',
+            ),
+            BottomNavigationBarItem(
+              icon: Stack(
+                children: [
+                  Icon(
+                    _selectedIndex == 3
+                        ? Icons.chat_bubble
+                        : Icons.chat_bubble_outline,
+                    size: 26,
+                  ),
+                  if (_hasUnreadMessages())
+                    Positioned(
+                      right: 0,
+                      top: 0,
+                      child: Container(
+                        width: 8,
+                        height: 8,
+                        decoration: BoxDecoration(
+                          color: Colors.red,
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+              label: 'Messages',
+            ),
+            BottomNavigationBarItem(
+              icon: Container(
+                width: 30,
+                height: 30,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: _selectedIndex == 4
+                      ? Border.all(color: Colors.black, width: 1.5)
+                      : null,
+                ),
+                child: ClipOval(
+                  child: _getUserProfileImage(),
+                ),
+              ),
+              label: 'Profile',
+            ),
+          ],
         ),
       ),
     );
   }
 
-  // Helper method to build custom navigation icons with selection indicators
-// Update your _buildIcon method in MainScreen to handle message notifications
-// Replace your current _buildIcon method with this one:
-
-  Widget _buildIcon(IconData icon, bool isSelected) {
-    // Special handling for message icon
-    if (icon == Icons.message_outlined) {
-      final currentUser = FirebaseAuth.instance.currentUser;
-
-      // If user is not logged in, show regular icon
-      if (currentUser == null) {
-        return _buildRegularIcon(icon, isSelected);
-      }
-
-      // If user is logged in, show icon with potential notification badge
-      return StreamBuilder<QuerySnapshot>(
-        stream: FirebaseFirestore.instance
-            .collection('chats')
-            .where('participants', arrayContains: currentUser.uid)
-            .where('hasUnreadMessages', isEqualTo: true)
-            .snapshots(),
-        builder: (context, snapshot) {
-          // Handle errors and loading states
-          if (snapshot.hasError || !snapshot.hasData) {
-            return _buildRegularIcon(icon, isSelected);
-          }
-
-          int unreadCount = 0;
-
-          // Only count messages where the current user is not the sender
-          for (var doc in snapshot.data!.docs) {
-            final data = doc.data() as Map<String, dynamic>;
-            if ((data['lastSenderId'] ?? '') != currentUser.uid) {
-              unreadCount++;
-            }
-          }
-
-          // If no unread messages, show regular icon
-          if (unreadCount == 0) {
-            return _buildRegularIcon(icon, isSelected);
-          }
-
-          // Otherwise, show icon with badge
-          return Stack(
-            children: [
-              _buildRegularIcon(icon, isSelected),
-              // Position the badge in the top-right corner
-              Positioned(
-                right: 0,
-                top: 5,
-                child: Container(
-                  padding: EdgeInsets.all(4),
-                  decoration: BoxDecoration(
-                    color: Colors.red,
-                    shape: BoxShape.circle,
-                  ),
-                  constraints: BoxConstraints(
-                    minWidth: 16,
-                    minHeight: 16,
-                  ),
-                  child: Text(
-                    unreadCount > 9 ? '9+' : unreadCount.toString(),
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 10,
-                      fontWeight: FontWeight.bold,
-                    ),
-                    textAlign: TextAlign.center,
-                  ),
-                ),
-              ),
-            ],
-          );
-        },
-      );
-    }
-
-    // For non-message icons, use the regular style
-    return _buildRegularIcon(icon, isSelected);
+  bool _hasUnreadMessages() {
+    // Implement your unread messages check here
+    return false; // Placeholder return
   }
 
-// Add this helper method to keep your original icon style
-  Widget _buildRegularIcon(IconData icon, bool isSelected) {
-    return Container(
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        color: isSelected
-            ? Colors.white.withOpacity(0.2)
-            : Colors.white.withOpacity(0.05),
-      ),
-      child: Stack(
-        alignment: Alignment.center,
-        children: [
-          Padding(
-            padding: const EdgeInsets.all(10.0),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(
-                  icon,
-                  size: 26.0,
-                  color: Colors.white,
-                ),
-                const SizedBox(height: 2.0),
-                // Show dot indicator for selected items
-                if (isSelected)
-                  Container(
-                    width: 6.0,
-                    height: 5.0,
-                    decoration: const BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: Colors.white,
-                    ),
-                  ),
-                const SizedBox(height: 2.0),
-                const SizedBox(height: 2.0),
-              ],
-            ),
-          ),
-        ],
-      ),
+  Widget _getUserProfileImage() {
+    return StreamBuilder<DocumentSnapshot>(
+      stream: FirebaseFirestore.instance
+          .collection('users')
+          .doc(FirebaseAuth.instance.currentUser?.uid)
+          .snapshots(),
+      builder: (context, snapshot) {
+        if (snapshot.hasData && snapshot.data?.data() != null) {
+          final userData = snapshot.data!.data() as Map<String, dynamic>;
+          final profileImageUrl = userData['profileImageUrl'];
+
+          if (profileImageUrl != null && profileImageUrl.isNotEmpty) {
+            return CachedNetworkImage(
+              imageUrl: profileImageUrl,
+              fit: BoxFit.cover,
+              placeholder: (context, url) => Icon(
+                Icons.person_outline,
+                size: 28,
+                color: _selectedIndex == 4 ? Colors.black : Colors.grey,
+              ),
+              errorWidget: (context, url, error) => Icon(
+                Icons.person_outline,
+                size: 28,
+                color: _selectedIndex == 4 ? Colors.black : Colors.grey,
+              ),
+            );
+          }
+        }
+
+        return Icon(
+          Icons.person_outline,
+          size: 28,
+          color: _selectedIndex == 4 ? Colors.black : Colors.grey,
+        );
+      },
     );
   }
 }

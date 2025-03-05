@@ -1,22 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../pages/card_provider.dart';
-
-class CartItem {
-  final String name;
-  final String condition;
-  final int points;
-  final String size;
-  final String imageUrl;
-
-  CartItem({
-    required this.name,
-    required this.condition,
-    required this.points,
-    required this.size,
-    required this.imageUrl,
-  });
-}
+import '../models/cart_item.dart'; // This should be the only CartItem import
+import './card_provider.dart';
+import 'package:cached_network_image/cached_network_image.dart';
+import 'package:shimmer/shimmer.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 class CheckoutPage extends StatefulWidget {
   @override
@@ -27,11 +16,138 @@ class _CheckoutPageState extends State<CheckoutPage> {
   bool hasMessagedDonor = false;
   bool showConfirmation = false;
   int totalAvailablePoints = 30000; // This would come from user's account
+  int? _userPoints;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadUserPoints();
+  }
+
+  Future<void> _loadUserPoints() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user != null) {
+      try {
+        final userDoc = await FirebaseFirestore.instance
+            .collection('users')
+            .doc(user.uid)
+            .get();
+
+        if (userDoc.exists) {
+          setState(() {
+            _userPoints = userDoc.data()?['points'] ?? 0;
+          });
+        }
+      } catch (e) {
+        print('Error loading user points: $e');
+      }
+    }
+  }
+
+  void _showOptionsMenu() {
+    showModalBottomSheet(
+      context: context,
+      builder: (context) => Container(
+        padding: EdgeInsets.symmetric(vertical: 20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: Icon(Icons.refresh),
+              title: Text('Refresh Points'),
+              onTap: () {
+                Navigator.pop(context);
+                _loadUserPoints();
+              },
+            ),
+            ListTile(
+              leading: Icon(Icons.delete_outline),
+              title: Text('Clear Cart'),
+              onTap: () {
+                Navigator.pop(context);
+                _showClearCartDialog();
+              },
+            ),
+            ListTile(
+              leading: Icon(Icons.help_outline),
+              title: Text('Help'),
+              onTap: () {
+                Navigator.pop(context);
+                _showHelpDialog();
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showClearCartDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Clear Cart'),
+        content: Text('Are you sure you want to clear your cart?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () {
+              context.read<CartProvider>().clearCart();
+              Navigator.pop(context);
+            },
+            child: Text('Clear', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showHelpDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Checkout Help'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('1. Message donors before checkout'),
+            Text('2. Confirm your points balance'),
+            Text('3. Review your items'),
+            Text('4. Complete your order'),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text('Got it'),
+          ),
+        ],
+      ),
+    );
+  }
 
   void _showConfirmationDialog() {
     setState(() {
       showConfirmation = true;
     });
+  }
+
+  void _handleBackPress() {
+    // Check if we can pop the current route
+    if (Navigator.canPop(context)) {
+      Navigator.pop(context);
+    } else {
+      // If we can't pop, navigate to the main screen with home tab
+      Navigator.pushReplacementNamed(
+        context,
+        '/main',
+        arguments: 0, // Navigate to home tab
+      );
+    }
   }
 
   @override
@@ -65,7 +181,8 @@ class _CheckoutPageState extends State<CheckoutPage> {
                                 style: ElevatedButton.styleFrom(
                                   backgroundColor: Colors.black,
                                 ),
-                                child: const Text('Continue Shopping'),
+                                child: const Text('Continue Shopping',
+                                    style: TextStyle(color: Colors.white)),
                               ),
                             ],
                           ),
@@ -102,7 +219,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
         children: [
           IconButton(
             icon: const Icon(Icons.arrow_back),
-            onPressed: () => Navigator.pop(context),
+            onPressed: _handleBackPress, // Use the new method
           ),
           const Expanded(
             child: Text(
@@ -113,7 +230,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
           ),
           IconButton(
             icon: const Icon(Icons.more_vert),
-            onPressed: () {},
+            onPressed: _showOptionsMenu,
           ),
         ],
       ),
@@ -129,19 +246,26 @@ class _CheckoutPageState extends State<CheckoutPage> {
           children: [
             ClipRRect(
               borderRadius: BorderRadius.circular(8),
-              child: Image.network(
-                item.imageUrl,
+              child: CachedNetworkImage(
+                imageUrl: item.imageUrl,
                 width: 80,
                 height: 80,
                 fit: BoxFit.cover,
-                errorBuilder: (context, error, stackTrace) {
-                  return Container(
+                placeholder: (context, url) => Shimmer.fromColors(
+                  baseColor: Colors.grey[300]!,
+                  highlightColor: Colors.grey[100]!,
+                  child: Container(
                     width: 80,
                     height: 80,
-                    color: Colors.grey[300],
-                    child: const Icon(Icons.error),
-                  );
-                },
+                    color: Colors.white,
+                  ),
+                ),
+                errorWidget: (context, url, error) => Container(
+                  width: 80,
+                  height: 80,
+                  color: Colors.grey[300],
+                  child: Icon(Icons.error),
+                ),
               ),
             ),
             const SizedBox(width: 12),
@@ -169,7 +293,8 @@ class _CheckoutPageState extends State<CheckoutPage> {
               children: [
                 IconButton(
                   icon: const Icon(Icons.delete_outline),
-                  onPressed: () => cartProvider.removeItem(item),
+                  onPressed: () =>
+                      cartProvider.removeItem(item), // Pass the item directly
                 ),
                 Text(
                   'Size: ${item.size}',
@@ -205,7 +330,10 @@ class _CheckoutPageState extends State<CheckoutPage> {
         child: Column(
           children: [
             _buildTotalRow('Total Items', '$totalPoints points'),
-            _buildTotalRow('Available Points', '$totalAvailablePoints points'),
+            _buildTotalRow(
+              'Available Points',
+              _userPoints != null ? '$_userPoints points' : 'Loading...',
+            ),
             _buildTotalRow('Discount', '0 points'),
             const Divider(),
             _buildTotalRow('Sub Total', '$totalPoints points'),

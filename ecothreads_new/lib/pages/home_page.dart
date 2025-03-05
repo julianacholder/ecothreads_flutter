@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cached_network_image/cached_network_image.dart';
+import 'package:shimmer/shimmer.dart';
 import 'itemdetail.dart';
 
 // StatefulWidget for the home page that displays available clothing items
@@ -30,6 +32,11 @@ class _HomePageState extends State<HomePage> {
   // User profile information
   String _userFullName = '';
   String? _userProfileImage;
+
+  // Add new variables for filtering
+  RangeValues _priceRange = RangeValues(0, 10000);
+  List<String> _selectedConditions = [];
+  String _selectedSort = 'Newest';
 
   @override
   void initState() {
@@ -61,69 +68,35 @@ class _HomePageState extends State<HomePage> {
   // Fetch available items from both donations and clothing collections
   // Updated method to fetch available items with donor information
   Future<void> _loadItems() async {
-    try {
-      setState(() => _isLoading = true);
+    if (!mounted) return;
 
-      // Fetch available donations
-      final QuerySnapshot donationsSnapshot = await _firestore
+    setState(() => _isLoading = true);
+
+    try {
+      final donationsSnapshot = await _firestore
           .collection('donations')
           .where('status', isEqualTo: 'available')
-          .get();
-
-      // Fetch clothing items
-      final QuerySnapshot clothingSnapshot =
-          await _firestore.collection('home_clothing').get();
+          .get(); // Remove limit to get all items
 
       List<Map<String, dynamic>> items = [];
 
-      // Process donation items
-      // Process donation items
       for (var doc in donationsSnapshot.docs) {
-        final data = doc.data() as Map<String, dynamic>;
+        final data = doc.data();
+        // Normalize category names
+        String category = 'All Items';
+        String itemName = data['itemName']?.toString().toLowerCase() ?? '';
 
-        // Instead of fetching donor info from the users collection,
-        // use the data already present in the donation document.
-        final String userFullName = data['userFullName'] ?? 'Anonymous';
-        final String? userProfileImage = data['userProfileImage'];
-
-        items.add({
-          'id': doc.id,
-          'name': data['itemName'] ?? 'Unnamed Item',
-          'points': data['points'] ?? 0,
-          'image': data['imageUrl'] ?? '',
-          'category': data['category'] ?? 'All Items',
-          'condition': data['condition'] ?? 'New',
-          'isManual': false,
-          'description': data['description'] ?? 'New Clothes',
-          'size': data['size'] ?? 'N/A',
-          'userId': data['userId'],
-          'userFullName': userFullName,
-          'userProfileImage': userProfileImage,
-        });
-      }
-
-      // Process clothing items
-      for (var doc in clothingSnapshot.docs) {
-        final data = doc.data() as Map<String, dynamic>;
-
-        // Get information about who added this clothing item
-        String userFullName = 'Store Item';
-        String? userProfileImage;
-
-        if (data['addedBy'] != null) {
-          try {
-            DocumentSnapshot userDoc =
-                await _firestore.collection('users').doc(data['addedBy']).get();
-
-            if (userDoc.exists) {
-              Map<String, dynamic> userData =
-                  userDoc.data() as Map<String, dynamic>;
-              userFullName = userData['fullName'] ?? 'Store Admin';
-              userProfileImage = userData['profileImageUrl'];
-            }
-          } catch (e) {
-            print('Error fetching admin info: $e');
-          }
+        // Determine category based on item name or existing category
+        if (data['category'] != null) {
+          category = data['category'];
+        } else if (itemName.contains('dress')) {
+          category = 'Dress';
+        } else if (itemName.contains('shirt') ||
+            itemName.contains('tshirt') ||
+            itemName.contains('t-shirt')) {
+          category = 'T-Shirt';
+        } else if (itemName.contains('jeans') || itemName.contains('pants')) {
+          category = 'Jeans';
         }
 
         items.add({
@@ -131,24 +104,84 @@ class _HomePageState extends State<HomePage> {
           'name': data['itemName'] ?? 'Unnamed Item',
           'points': data['points'] ?? 0,
           'image': data['imageUrl'] ?? '',
-          'category': data['category'] ?? 'All Items',
+          'category': category, // Use normalized category
+          'condition': data['condition'] ?? 'New',
+          'isManual': false,
+          'description': data['description'] ?? 'New Clothes',
+          'size': data['size'] ?? 'N/A',
+          'userId': data['userId'],
+          'userFullName': data['userFullName'] ?? 'Anonymous',
+          'userProfileImage': data['userProfileImage'],
+        });
+      }
+
+      if (mounted) {
+        setState(() {
+          _allItems = items;
+          _isLoading = false;
+        });
+      }
+
+      _loadMoreItems();
+    } catch (e) {
+      print('Error loading items: $e');
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
+  }
+
+  // New method to load additional items
+  Future<void> _loadMoreItems() async {
+    try {
+      final clothingSnapshot = await _firestore
+          .collection('home_clothing')
+          .get(); // Remove limit to get all items
+
+      List<Map<String, dynamic>> additionalItems = [];
+
+      for (var doc in clothingSnapshot.docs) {
+        final data = doc.data();
+        // Normalize category names
+        String category = 'All Items';
+        String itemName = data['itemName']?.toString().toLowerCase() ?? '';
+
+        // Determine category based on item name or existing category
+        if (data['category'] != null) {
+          category = data['category'];
+        } else if (itemName.contains('dress')) {
+          category = 'Dress';
+        } else if (itemName.contains('shirt') ||
+            itemName.contains('tshirt') ||
+            itemName.contains('t-shirt')) {
+          category = 'T-Shirt';
+        } else if (itemName.contains('jeans') || itemName.contains('pants')) {
+          category = 'Jeans';
+        }
+
+        additionalItems.add({
+          'id': doc.id,
+          'name': data['itemName'] ?? 'Unnamed Item',
+          'points': data['points'] ?? 0,
+          'image': data['imageUrl'] ?? '',
+          'category': category, // Use normalized category
           'condition': data['condition'] ?? 'New',
           'isManual': true,
           'description': data['description'] ?? 'New Clothes',
           'size': data['size'] ?? 'N/A',
           'userId': data['addedBy'],
-          'userFullName': userFullName,
-          'userProfileImage': userProfileImage,
+          'userFullName': 'Store Item',
+          'userProfileImage': null,
         });
       }
 
-      setState(() {
-        _allItems = items;
-        _isLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _allItems.addAll(additionalItems);
+        });
+      }
     } catch (e) {
-      print('Error loading items: $e');
-      setState(() => _isLoading = false);
+      print('Error loading additional items: $e');
     }
   }
 
@@ -159,10 +192,35 @@ class _HomePageState extends State<HomePage> {
           .toString()
           .toLowerCase()
           .contains(_searchQuery.toLowerCase());
+
       final matchesCategory = _selectedCategory == 'All Items' ||
-          item['category'] == _selectedCategory;
-      return matchesSearch && matchesCategory;
-    }).toList();
+          item['category'].toString().toLowerCase() ==
+              _selectedCategory.toLowerCase();
+
+      final int itemPoints =
+          int.tryParse(item['points']?.toString() ?? '0') ?? 0;
+      final matchesPrice =
+          itemPoints >= _priceRange.start && itemPoints <= _priceRange.end;
+      final matchesCondition = _selectedConditions.isEmpty ||
+          _selectedConditions.contains(item['condition']);
+
+      return matchesSearch &&
+          matchesCategory &&
+          matchesPrice &&
+          matchesCondition;
+    }).toList()
+      ..sort((a, b) {
+        switch (_selectedSort) {
+          case 'Price: Low to High':
+            return (int.parse(a['points'].toString()) -
+                int.parse(b['points'].toString()));
+          case 'Price: High to Low':
+            return (int.parse(b['points'].toString()) -
+                int.parse(a['points'].toString()));
+          default: // 'Newest'
+            return 0; // Keep original order
+        }
+      });
   }
 
   @override
@@ -172,40 +230,31 @@ class _HomePageState extends State<HomePage> {
       body: Padding(
         padding: const EdgeInsets.only(top: 50.0),
         child: SafeArea(
-          child: Stack(
-            children: [
+          child: CustomScrollView(
+            slivers: [
               // Main content with CustomScrollView for better performance
-              CustomScrollView(
-                slivers: [
-                  SliverToBoxAdapter(
-                    child: Padding(
-                      padding: const EdgeInsets.all(16.0),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          _buildHeader(),
-                          const SizedBox(height: 20),
-                          _buildSearchBar(),
-                          const SizedBox(height: 20),
-                          _buildBanner(),
-                          const SizedBox(height: 20),
-                          _buildCategories(),
-                        ],
-                      ),
-                    ),
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.all(16.0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _buildHeader(),
+                      const SizedBox(height: 20),
+                      _buildSearchBar(),
+                      const SizedBox(height: 20),
+                      _buildBanner(),
+                      const SizedBox(height: 20),
+                      _buildCategories(),
+                    ],
                   ),
-                  _buildItemsGrid(),
-                  // Bottom padding to account for navigation bar
-                  const SliverToBoxAdapter(
-                    child: SizedBox(height: 80),
-                  ),
-                ],
-              ),
-              // Loading indicator overlay
-              if (_isLoading)
-                const Center(
-                  child: CircularProgressIndicator(),
                 ),
+              ),
+              _buildItemsGrid(),
+              // Bottom padding to account for navigation bar
+              const SliverToBoxAdapter(
+                child: SizedBox(height: 80),
+              ),
             ],
           ),
         ),
@@ -243,13 +292,31 @@ class _HomePageState extends State<HomePage> {
             ),
           ],
         ),
-        // User profile image
+        // Fixed profile image display
         CircleAvatar(
           radius: 25,
           backgroundColor: Colors.grey[300],
-          backgroundImage: _userProfileImage != null
-              ? NetworkImage(_userProfileImage!)
-              : const AssetImage('assets/images/profile.png') as ImageProvider,
+          child: _userProfileImage != null
+              ? ClipOval(
+                  child: Image.network(
+                    _userProfileImage!,
+                    width: 50,
+                    height: 50,
+                    fit: BoxFit.cover,
+                    errorBuilder: (context, error, stackTrace) {
+                      return Icon(
+                        Icons.person,
+                        size: 30,
+                        color: Colors.grey.shade600,
+                      );
+                    },
+                  ),
+                )
+              : Icon(
+                  Icons.person,
+                  size: 30,
+                  color: Colors.grey.shade600,
+                ),
         ),
       ],
     );
@@ -290,7 +357,10 @@ class _HomePageState extends State<HomePage> {
             color: Colors.black,
             borderRadius: BorderRadius.circular(12),
           ),
-          child: const Icon(Icons.tune, color: Colors.white),
+          child: GestureDetector(
+            onTap: _showFilterDialog,
+            child: const Icon(Icons.tune, color: Colors.white),
+          ),
         ),
       ],
     );
@@ -413,35 +483,106 @@ class _HomePageState extends State<HomePage> {
   Widget _buildItemsGrid() {
     return SliverPadding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-      sliver: SliverGrid(
+      sliver: _isLoading
+          ? SliverToBoxAdapter(child: _buildShimmerLoading())
+          : filteredItems.isEmpty
+              ? SliverToBoxAdapter(
+                  child: Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.search_off,
+                            size: 64, color: Colors.grey[400]),
+                        const SizedBox(height: 16),
+                        Text(
+                          'No items found',
+                          style: TextStyle(
+                            fontSize: 18,
+                            color: Colors.grey[600],
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                )
+              : SliverGrid(
+                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: 3,
+                    childAspectRatio: 0.62,
+                    crossAxisSpacing: 10,
+                    mainAxisSpacing: 10,
+                  ),
+                  delegate: SliverChildBuilderDelegate(
+                    (context, index) {
+                      final item = filteredItems[index];
+                      return _buildItemCard(item);
+                    },
+                    childCount: filteredItems.length,
+                  ),
+                ),
+    );
+  }
+
+  // Add new method for shimmer loading effect
+  Widget _buildShimmerLoading() {
+    return Padding(
+      padding: const EdgeInsets.only(top: 8.0),
+      child: GridView.builder(
+        shrinkWrap: true,
+        physics: const NeverScrollableScrollPhysics(),
         gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
           crossAxisCount: 3,
           childAspectRatio: 0.62,
           crossAxisSpacing: 10,
           mainAxisSpacing: 10,
         ),
-        delegate: SliverChildBuilderDelegate(
-          (context, index) {
-            final item = filteredItems[index];
-            return GestureDetector(
-              onTap: () {
-                Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (context) => ProductPage(item: item),
+        itemCount: 9, // Show more shimmer items
+        itemBuilder: (context, index) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: Colors.grey[300],
+                    borderRadius: BorderRadius.circular(12),
                   ),
-                );
-              },
-              child: _buildItemCard(item),
-            );
-          },
-          childCount: filteredItems.length,
-        ),
+                ),
+              ),
+              const SizedBox(height: 6),
+              Container(
+                width: double.infinity,
+                height: 12,
+                color: Colors.grey[300],
+              ),
+              const SizedBox(height: 4),
+              Container(
+                width: 60,
+                height: 12,
+                color: Colors.grey[300],
+              ),
+              const SizedBox(height: 4),
+              Container(
+                width: 40,
+                height: 12,
+                color: Colors.grey[300],
+              ),
+            ],
+          );
+        },
       ),
     );
   }
 
   // Build individual item card
   Widget _buildItemCard(Map<String, dynamic> item) {
+    // Add null checks for item values
+    final String name = item['name']?.toString() ?? 'Unnamed Item';
+    final String condition = item['condition']?.toString() ?? 'New';
+    final int points = int.tryParse(item['points']?.toString() ?? '0') ?? 0;
+    final String imageUrl = item['image']?.toString() ?? '';
+
     return GestureDetector(
       onTap: () {
         Navigator.push(
@@ -459,19 +600,37 @@ class _HomePageState extends State<HomePage> {
               decoration: BoxDecoration(
                 color: Colors.grey[200],
                 borderRadius: BorderRadius.circular(12),
-                image: DecorationImage(
-                  image: NetworkImage(item['image']),
-                  fit: BoxFit.cover,
-                  onError: (error, stackTrace) {
-                    print('Error loading image: $error');
-                  },
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: AspectRatio(
+                  aspectRatio: 1,
+                  child: CachedNetworkImage(
+                    imageUrl: imageUrl,
+                    fit: BoxFit.cover,
+                    placeholder: (context, url) => Container(
+                      color: Colors.grey[300],
+                      child: Shimmer.fromColors(
+                        baseColor: Colors.grey[300]!,
+                        highlightColor: Colors.grey[100]!,
+                        child: Container(
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
+                    errorWidget: (context, url, error) => Container(
+                      color: Colors.grey[300],
+                      child: Icon(Icons.image_not_supported_outlined,
+                          color: Colors.grey[400]),
+                    ),
+                  ),
                 ),
               ),
             ),
           ),
           const SizedBox(height: 6),
           Text(
-            item['name'],
+            name,
             style: const TextStyle(
               fontSize: 13,
               fontWeight: FontWeight.w500,
@@ -482,7 +641,7 @@ class _HomePageState extends State<HomePage> {
           Row(
             children: [
               Text(
-                item['condition'],
+                condition,
                 style: TextStyle(
                   color: Colors.grey[600],
                   fontSize: 11,
@@ -500,13 +659,168 @@ class _HomePageState extends State<HomePage> {
             ],
           ),
           Text(
-            '${item['points']}pts',
+            '${points}pts',
             style: const TextStyle(
               fontSize: 13,
               fontWeight: FontWeight.bold,
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  // Add method to show filter dialog
+  void _showFilterDialog() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) => StatefulBuilder(
+        builder: (context, setModalState) => Container(
+          // renamed setState to setModalState for clarity
+          padding: EdgeInsets.all(20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'Filter Items',
+                    style: TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  IconButton(
+                    icon: Icon(Icons.close),
+                    onPressed: () => Navigator.pop(context),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 20),
+              Text(
+                'Price Range (Points)',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+              RangeSlider(
+                values: _priceRange,
+                min: 0,
+                activeColor: Color(0xFF16A637),
+                max: 10000,
+                divisions: 100,
+                labels: RangeLabels(
+                  _priceRange.start.round().toString(),
+                  _priceRange.end.round().toString(),
+                ),
+                onChanged: (RangeValues values) {
+                  setModalState(() {
+                    _priceRange = values;
+                  });
+                },
+              ),
+              const SizedBox(height: 20),
+              Text(
+                'Condition',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+              Wrap(
+                spacing: 8,
+                children: [
+                  'New',
+                  'Slightly Used',
+                  'Well Worn',
+                ]
+                    .map((condition) => FilterChip(
+                          label: Text(condition),
+                          selected: _selectedConditions.contains(condition),
+                          onSelected: (selected) {
+                            setModalState(() {
+                              if (selected) {
+                                _selectedConditions.add(condition);
+                              } else {
+                                _selectedConditions.remove(condition);
+                              }
+                            });
+                          },
+                        ))
+                    .toList(),
+              ),
+              const SizedBox(height: 20),
+              Text(
+                'Sort By',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+              Wrap(
+                spacing: 8,
+                children: [
+                  'Newest',
+                  'Price: Low to High',
+                  'Price: High to Low',
+                ]
+                    .map((sort) => ChoiceChip(
+                          label: Text(sort),
+                          selected: _selectedSort == sort,
+                          onSelected: (selected) {
+                            setModalState(() {
+                              if (selected) {
+                                _selectedSort = sort;
+                              }
+                            });
+                          },
+                        ))
+                    .toList(),
+              ),
+              const SizedBox(height: 20),
+              Row(
+                children: [
+                  Expanded(
+                    child: ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.grey[300],
+                      ),
+                      onPressed: () {
+                        // Update both modal state and parent state
+                        setModalState(() {
+                          _priceRange = RangeValues(0, 10000);
+                          _selectedConditions = [];
+                          _selectedSort = 'Newest';
+                        });
+                        setState(() {
+                          _priceRange = RangeValues(0, 10000);
+                          _selectedConditions = [];
+                          _selectedSort = 'Newest';
+                        });
+                      },
+                      child:
+                          Text('Reset', style: TextStyle(color: Colors.black)),
+                    ),
+                  ),
+                  SizedBox(width: 10),
+                  Expanded(
+                    child: ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.black,
+                      ),
+                      onPressed: () {
+                        setState(() {}); // Refresh parent widget
+                        Navigator.pop(context);
+                      },
+                      child: Text(
+                        'Apply',
+                        style: TextStyle(color: Colors.white),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

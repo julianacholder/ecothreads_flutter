@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:io';
+import 'env_page.dart'; // Add this import
 
 class SettingsPage extends StatefulWidget {
   const SettingsPage({super.key});
@@ -301,22 +302,25 @@ class _SettingsPageState extends State<SettingsPage> {
                   padding: const EdgeInsets.symmetric(horizontal: 16),
                   child: Column(
                     children: [
-                      _buildSettingsSwitch(
-                        title: 'Private',
-                        value: _isPrivate,
-                        onChanged: (value) {
-                          setState(() => _isPrivate = value);
-                        },
-                      ),
                       _buildSettingsItem(
                         icon: Icons.recycling,
                         title: 'Environmental Impact',
                         showArrow: true,
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) =>
+                                  const EnvironmentalImpactPage(),
+                            ),
+                          );
+                        },
                       ),
                       _buildSettingsItem(
                         icon: Icons.headphones,
                         title: 'Help Center',
                         showArrow: true,
+                        onTap: () => _showHelpDialog(context),
                       ),
                       _buildSettingsItem(
                         icon: Icons.logout,
@@ -531,6 +535,61 @@ class _SettingsPageState extends State<SettingsPage> {
           ),
         );
       },
+    );
+  }
+
+  void _showHelpDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Help Center'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _buildHelpSection(
+              'How to Donate',
+              'Tap the + button in the navigation bar to donate clothes. Take clear photos and provide accurate descriptions.',
+            ),
+            const SizedBox(height: 16),
+            _buildHelpSection(
+              'Points System',
+              'Earn points by donating clothes. Points can be used to redeem clothes from other donors.',
+            ),
+            const SizedBox(height: 16),
+            _buildHelpSection(
+              'Contact Support',
+              'Email: support@ecothreads.com\nPhone: (555) 123-4567',
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Close'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildHelpSection(String title, String content) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          title,
+          style: const TextStyle(
+            fontWeight: FontWeight.bold,
+            fontSize: 16,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          content,
+          style: const TextStyle(fontSize: 14),
+        ),
+      ],
     );
   }
 }

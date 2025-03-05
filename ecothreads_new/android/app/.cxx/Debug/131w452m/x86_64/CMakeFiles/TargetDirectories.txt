@@ -1,0 +1,2 @@
+C:/Users/julia/OneDrive/Desktop/Ecothreads/ecothreads_flutter/ecothreads_new/android/app/.cxx/Debug/131w452m/x86_64/CMakeFiles/edit_cache.dir
+C:/Users/julia/OneDrive/Desktop/Ecothreads/ecothreads_flutter/ecothreads_new/android/app/.cxx/Debug/131w452m/x86_64/CMakeFiles/rebuild_cache.dir
