@@ -6,11 +6,11 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:shimmer/shimmer.dart';
 import 'itemdetail.dart';
+import 'package:share_plus/share_plus.dart';
+import 'package:fluttertoast/fluttertoast.dart';
 
 // StatefulWidget for the home page that displays available clothing items
 class HomePage extends StatefulWidget {
-  const HomePage({Key? key}) : super(key: key);
-
   @override
   State<HomePage> createState() => _HomePageState();
 }
@@ -44,6 +44,121 @@ class _HomePageState extends State<HomePage> {
     // Load initial data when widget is created
     _loadUserData();
     _loadItems();
+  }
+
+  Future<void> _shareInviteLink() async {
+    try {
+      // Generate a simple invite code
+      final String inviteCode = user?.uid.substring(0, 8) ?? '12345';
+
+      // Show a dialog with the invite code
+      showDialog(
+        context: context,
+        builder: (BuildContext context) {
+          return AlertDialog(
+            title: Text('Invite Friends'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text('Share this code with your friends:'),
+                SizedBox(height: 10),
+                SelectableText(
+                  inviteCode,
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 18,
+                  ),
+                ),
+                SizedBox(height: 20),
+                Text('You will earn 5 points for each friend who joins!'),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () {
+                  Navigator.of(context).pop();
+                },
+                child: Text('Cancel'),
+              ),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.black,
+                ),
+                onPressed: () async {
+                  // Add points to user for attempting to share
+                  await _addPointsToUser();
+                  Navigator.of(context).pop();
+                },
+                child: Text(
+                  'Got it!',
+                  style: TextStyle(color: Colors.white),
+                ),
+              ),
+            ],
+          );
+        },
+      );
+    } catch (e) {
+      print('Error with invite: $e');
+      // Use a simple SnackBar instead of toast
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Something went wrong. Please try again.'),
+          duration: Duration(seconds: 2),
+        ),
+      );
+    }
+  }
+
+// New method to add points to the user after sharing
+  Future<void> _addPointsToUser() async {
+    if (user == null) return;
+
+    try {
+      // Reference to the user document
+      final userRef = _firestore.collection('users').doc(user!.uid);
+
+      // Get current user data
+      final userDoc = await userRef.get();
+
+      if (userDoc.exists) {
+        // Get current points
+        int currentPoints = userDoc.get('points') ?? 0;
+
+        // Update user points
+        await userRef.update({
+          'points': currentPoints + 5,
+        });
+
+        // Add record to points history
+        await _firestore.collection('points_history').add({
+          'userId': user!.uid,
+          'points': 5,
+          'reason': 'Invited a friend',
+          'timestamp': FieldValue.serverTimestamp(),
+        });
+
+        // Show success message using SnackBar instead of toast
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('You earned 5 points for sharing!'),
+            backgroundColor: Colors.green,
+            duration: Duration(seconds: 2),
+          ),
+        );
+
+        // Refresh user data
+        _loadUserData();
+      }
+    } catch (e) {
+      print('Error adding points: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to add points. Please try again.'),
+          duration: Duration(seconds: 2),
+        ),
+      );
+    }
   }
 
   // Fetch user profile data from Firestore
@@ -368,54 +483,57 @@ class _HomePageState extends State<HomePage> {
 
   // Build the promotional banner
   Widget _buildBanner() {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(16),
-      child: Container(
-        height: 120,
-        width: double.infinity,
-        decoration: const BoxDecoration(
-          image: DecorationImage(
-            image: AssetImage('assets/images/friends.jpg'),
-            fit: BoxFit.cover,
-          ),
-        ),
+    return GestureDetector(
+      onTap: _shareInviteLink,
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(16),
         child: Container(
-          decoration: BoxDecoration(
-            color: Colors.black.withOpacity(0.3),
+          height: 120,
+          width: double.infinity,
+          decoration: const BoxDecoration(
+            image: DecorationImage(
+              image: AssetImage('assets/images/friends.jpg'),
+              fit: BoxFit.cover,
+            ),
           ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              const Padding(
-                padding: EdgeInsets.all(16.0),
-                child: Text(
-                  'Invite\nYour\nFriends',
-                  style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    color: Colors.white,
-                    fontSize: 18,
+          child: Container(
+            decoration: BoxDecoration(
+              color: Colors.black.withOpacity(0.3),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Padding(
+                  padding: EdgeInsets.all(16.0),
+                  child: Text(
+                    'Invite\nYour\nFriends',
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                      fontSize: 18,
+                    ),
                   ),
                 ),
-              ),
-              Container(
-                margin: const EdgeInsets.all(16.0),
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 6,
-                ),
-                decoration: BoxDecoration(
-                  color: Colors.black,
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: const Text(
-                  'Earn points',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w500,
+                Container(
+                  margin: const EdgeInsets.all(16.0),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 6,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.black,
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: const Text(
+                    'Earn 5 points',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w500,
+                    ),
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),

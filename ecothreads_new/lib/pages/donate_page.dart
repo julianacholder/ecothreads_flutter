@@ -14,6 +14,8 @@ class DonatePage extends StatefulWidget {
 
 class _DonatePageState extends State<DonatePage> {
   String selectedCondition = 'New';
+  String selectedSize = 'N/A';
+  final List<String> clothingSizes = ['S', 'M', 'L', 'XL', 'XXL'];
   final ImagePicker _picker = ImagePicker();
   File? _image;
   bool _isLoading = false;
@@ -100,6 +102,7 @@ class _DonatePageState extends State<DonatePage> {
           'itemName': _nameController.text,
           'description': _descriptionController.text,
           'condition': selectedCondition,
+          'size': selectedSize,
           'imageUrl': imageUrl,
           'points': conditionPoints,
           'createdAt': FieldValue.serverTimestamp(),
@@ -113,6 +116,7 @@ class _DonatePageState extends State<DonatePage> {
           'itemName': _nameController.text,
           'description': _descriptionController.text,
           'condition': selectedCondition,
+          'size': selectedSize,
           'imageUrl': imageUrl,
           'points': conditionPoints + 150,
           'originalDonationId': donationRef.id,
@@ -170,6 +174,7 @@ class _DonatePageState extends State<DonatePage> {
       _nameController.clear();
       _descriptionController.clear();
       selectedCondition = 'New';
+      selectedSize = 'N/A';
     });
   }
 
@@ -290,6 +295,41 @@ class _DonatePageState extends State<DonatePage> {
                       _buildConditionButton('Slightly Used'),
                       const SizedBox(width: 8),
                       _buildConditionButton('Well-Worn'),
+                    ],
+                  ),
+                  const SizedBox(height: 24),
+                  const Text(
+                    'Size',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Column(
+                        children: [
+                          _buildSizeButton('XS'),
+                          const SizedBox(height: 8),
+                          _buildSizeButton('N/A'),
+                        ],
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: SingleChildScrollView(
+                          scrollDirection: Axis.horizontal,
+                          child: Row(
+                            children: clothingSizes
+                                .map((size) => Padding(
+                                      padding: const EdgeInsets.only(right: 8),
+                                      child: _buildSizeButton(size),
+                                    ))
+                                .toList(),
+                          ),
+                        ),
+                      ),
                     ],
                   ),
                   const SizedBox(height: 24),
@@ -466,6 +506,39 @@ class _DonatePageState extends State<DonatePage> {
         ),
         child: Text(
           condition,
+          style: TextStyle(
+            color: isSelected ? Colors.white : Colors.black,
+            fontSize: 14,
+            fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSizeButton(String size) {
+    bool isSelected = selectedSize == size;
+
+    return GestureDetector(
+      onTap: () {
+        setState(() {
+          selectedSize = size;
+        });
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(
+          horizontal: 16,
+          vertical: 8,
+        ),
+        decoration: BoxDecoration(
+          color: isSelected ? Colors.black : Colors.white,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(
+            color: isSelected ? Colors.black : Colors.grey.shade300,
+          ),
+        ),
+        child: Text(
+          size,
           style: TextStyle(
             color: isSelected ? Colors.white : Colors.black,
             fontSize: 14,

@@ -134,6 +134,69 @@ class _MainScreenState extends State<MainScreen> {
     });
   }
 
+  Widget _buildMessagesIcon() {
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseFirestore.instance
+          .collection('chats')
+          .where('participants',
+              arrayContains: FirebaseAuth.instance.currentUser?.uid)
+          .snapshots(),
+      builder: (context, snapshot) {
+        bool hasUnread = false;
+        int unreadCount = 0;
+
+        if (snapshot.hasData) {
+          for (var doc in snapshot.data!.docs) {
+            final data = doc.data() as Map<String, dynamic>;
+            if (data['hasUnreadMessages'] == true &&
+                data['lastSenderId'] !=
+                    FirebaseAuth.instance.currentUser?.uid) {
+              hasUnread = true;
+              unreadCount += (data['unreadCount'] ?? 0) as int;
+            }
+          }
+        }
+
+        return Stack(
+          clipBehavior: Clip.none, // Allow badge to overflow
+          children: [
+            Icon(
+              _selectedIndex == 3
+                  ? Icons.chat_bubble
+                  : Icons.chat_bubble_outline,
+              size: 26,
+            ),
+            if (hasUnread)
+              Positioned(
+                right: -2,
+                top: -4, // Changed from 0 to -8 to move badge up
+                child: Container(
+                  padding: EdgeInsets.all(4),
+                  decoration: BoxDecoration(
+                    color: Colors.red,
+                    shape: BoxShape.circle,
+                  ),
+                  constraints: BoxConstraints(
+                    minWidth: 16,
+                    minHeight: 16,
+                  ),
+                  child: Text(
+                    unreadCount > 9 ? '9+' : unreadCount.toString(),
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+              ),
+          ],
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -221,29 +284,7 @@ class _MainScreenState extends State<MainScreen> {
               label: 'Donate',
             ),
             BottomNavigationBarItem(
-              icon: Stack(
-                children: [
-                  Icon(
-                    _selectedIndex == 3
-                        ? Icons.chat_bubble
-                        : Icons.chat_bubble_outline,
-                    size: 26,
-                  ),
-                  if (_hasUnreadMessages())
-                    Positioned(
-                      right: 0,
-                      top: 0,
-                      child: Container(
-                        width: 8,
-                        height: 8,
-                        decoration: BoxDecoration(
-                          color: Colors.red,
-                          shape: BoxShape.circle,
-                        ),
-                      ),
-                    ),
-                ],
-              ),
+              icon: _buildMessagesIcon(), // Use the new method here
               label: 'Messages',
             ),
             BottomNavigationBarItem(
@@ -266,11 +307,6 @@ class _MainScreenState extends State<MainScreen> {
         ),
       ),
     );
-  }
-
-  bool _hasUnreadMessages() {
-    // Implement your unread messages check here
-    return false; // Placeholder return
   }
 
   Widget _getUserProfileImage() {
