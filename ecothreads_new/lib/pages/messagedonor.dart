@@ -192,8 +192,65 @@ class _MessageDonorState extends State<MessageDonor> {
     }
   }
 
+  Future<bool> _checkUserRestriction() async {
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) return false;
+
+      // Check the current user's restriction status
+      final userDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .get();
+
+      final bool isRestricted = userDoc.data()?['isRestricted'] ?? false;
+
+      if (isRestricted) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                  'Your account is currently restricted. Please contact support@ecothreads.com'),
+              backgroundColor: Colors.red,
+              duration: Duration(seconds: 5),
+              action: SnackBarAction(
+                label: 'Dismiss',
+                onPressed: () {},
+                textColor: Colors.white,
+              ),
+            ),
+          );
+        }
+      }
+
+      return isRestricted;
+    } catch (e) {
+      print('Error checking restriction: $e');
+      return false;
+    }
+  }
+
   void _sendMessage() async {
     if (messageController.text.isEmpty) return;
+
+    // Check for restriction before sending
+    bool isRestricted = await _checkUserRestriction();
+    if (isRestricted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+              'Your account is currently restricted. Please contact support@ecothreads.com'),
+          backgroundColor: Colors.red,
+          duration: Duration(seconds: 5),
+          action: SnackBarAction(
+            label: 'Dismiss',
+            onPressed: () {},
+            textColor: Colors.white,
+          ),
+        ),
+      );
+      return;
+    }
 
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
@@ -536,26 +593,41 @@ class _MessageDonorState extends State<MessageDonor> {
         ),
         centerTitle: true,
       ),
-      body: Column(
-        children: [
-          Container(
-            height: 1,
-            color: Colors.grey.shade200,
-          ),
-          const SizedBox(height: 5),
-          Expanded(
-            // Show Firebase messages if chatId is provided, otherwise show local messages
-            child: widget.chatId != null || _generatedChatId != null
-                ? _buildFirebaseMessages()
-                : _buildLocalMessages(),
-          ),
-          const SizedBox(height: 5),
-          ChatInputField(
-            messageController: messageController,
-            onSend: _sendMessage,
-            onImagePick: _sendImageMessage,
-          ),
-        ],
+      body: FutureBuilder<bool>(
+        future: _checkUserRestriction(),
+        builder: (context, restrictionSnapshot) {
+          if (restrictionSnapshot.connectionState == ConnectionState.waiting) {
+            return Center(child: CircularProgressIndicator());
+          }
+
+          final bool isRestricted = restrictionSnapshot.data ?? false;
+
+          return Column(
+            children: [
+              Container(
+                height: 1,
+                color: Colors.grey.shade200,
+              ),
+              const SizedBox(height: 5),
+              Expanded(
+                // Show Firebase messages if chatId is provided, otherwise show local messages
+                child: widget.chatId != null || _generatedChatId != null
+                    ? _buildFirebaseMessages()
+                    : _buildLocalMessages(),
+              ),
+              const SizedBox(height: 5),
+              ChatInputField(
+                messageController: messageController,
+                onSend:
+                    isRestricted ? null : _sendMessage, // Disable if restricted
+                onImagePick: isRestricted
+                    ? null
+                    : _sendImageMessage, // Disable if restricted
+                isDisabled: isRestricted,
+              ),
+            ],
+          );
+        },
       ),
     );
   }
@@ -827,13 +899,15 @@ class _MessageDonorState extends State<MessageDonor> {
 
 class ChatInputField extends StatelessWidget {
   final TextEditingController messageController;
-  final VoidCallback onSend;
-  final VoidCallback onImagePick;
+  final VoidCallback? onSend;
+  final VoidCallback? onImagePick;
+  final bool isDisabled;
 
   ChatInputField({
     required this.messageController,
-    required this.onSend,
-    required this.onImagePick,
+    this.onSend,
+    this.onImagePick,
+    this.isDisabled = false,
   });
 
   @override
@@ -842,23 +916,26 @@ class ChatInputField extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
       child: Row(
         children: [
-          // Image picker button
           IconButton(
-            icon: Icon(Icons.image, color: Colors.grey),
-            onPressed: onImagePick,
+            icon: Icon(Icons.image,
+                color: isDisabled ? Colors.grey.shade300 : Colors.grey),
+            onPressed: isDisabled ? null : onImagePick,
           ),
-          // TextField for message input
           Expanded(
             child: TextField(
               controller: messageController,
+              enabled: !isDisabled,
               decoration: InputDecoration(
-                hintText: 'Write your message...',
+                hintText: isDisabled
+                    ? 'Messaging restricted'
+                    : 'Write your message...',
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(24),
                   borderSide: BorderSide.none,
                 ),
                 filled: true,
-                fillColor: Colors.grey.shade100,
+                fillColor:
+                    isDisabled ? Colors.grey.shade100 : Colors.grey.shade100,
                 contentPadding:
                     EdgeInsets.symmetric(horizontal: 16, vertical: 10),
               ),
@@ -868,15 +945,16 @@ class ChatInputField extends StatelessWidget {
             ),
           ),
           SizedBox(width: 8),
-          // Send Button
           Container(
             decoration: BoxDecoration(
-              color: Colors.black,
+              color: isDisabled ? Colors.grey.shade300 : Colors.black,
               shape: BoxShape.circle,
             ),
             child: IconButton(
-              icon: Icon(Icons.send, color: Colors.white, size: 18),
-              onPressed: onSend,
+              icon: Icon(Icons.send,
+                  color: isDisabled ? Colors.grey.shade400 : Colors.white,
+                  size: 18),
+              onPressed: isDisabled ? null : onSend,
             ),
           ),
         ],

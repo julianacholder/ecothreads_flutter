@@ -162,113 +162,230 @@ class _DonorProfileState extends State<DonorProfilePage> {
   }
 
   void _openDispute() {
+    final TextEditingController disputeController = TextEditingController();
+    bool isSubmitting = false;
+
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: Text('Open Dispute'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              maxLines: 3,
-              decoration: InputDecoration(
-                hintText: 'Describe your issue...',
-                border: OutlineInputBorder(),
+      builder: (context) => StatefulBuilder(
+        builder: (context, setState) => AlertDialog(
+          title: Text('Open Dispute'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: disputeController,
+                maxLines: 3,
+                decoration: InputDecoration(
+                  hintText: 'Describe your issue...',
+                  border: OutlineInputBorder(),
+                  errorText: disputeController.text.isEmpty ? 'Required' : null,
+                ),
               ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: isSubmitting ? null : () => Navigator.pop(context),
+              child: Text('Cancel'),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.black,
+              ),
+              onPressed: isSubmitting
+                  ? null
+                  : () async {
+                      if (disputeController.text.trim().isEmpty) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text('Please describe the issue')),
+                        );
+                        return;
+                      }
+
+                      setState(() => isSubmitting = true);
+
+                      try {
+                        await FirebaseFirestore.instance
+                            .collection('disputes')
+                            .add({
+                          'reportedUserId': widget.donorId,
+                          'reportedBy': FirebaseAuth.instance.currentUser?.uid,
+                          'description': disputeController.text.trim(),
+                          'timestamp': FieldValue.serverTimestamp(),
+                          'status': 'pending',
+                          'type': 'dispute',
+                        });
+
+                        Navigator.pop(context);
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                              content: Text('Dispute submitted successfully')),
+                        );
+                      } catch (e) {
+                        setState(() => isSubmitting = false);
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text('Error submitting dispute')),
+                        );
+                      }
+                    },
+              child: Text('Submit', style: TextStyle(color: Colors.white)),
             ),
           ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: Text('Cancel'),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.black,
-            ),
-            onPressed: () {
-              // Add dispute to Firestore
-              FirebaseFirestore.instance.collection('disputes').add({
-                'reportedUserId': widget.donorId,
-                'reportedBy': FirebaseAuth.instance.currentUser?.uid,
-                'timestamp': FieldValue.serverTimestamp(),
-                'status': 'pending',
-                'type': 'dispute',
-              });
-              Navigator.pop(context);
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text('Dispute submitted successfully')),
-              );
-            },
-            child: Text('Submit', style: TextStyle(color: Colors.white)),
-          ),
-        ],
       ),
     );
   }
 
+  Future<void> _updateReportCount() async {
+    try {
+      // Get user document reference
+      final userRef = _firestore.collection('users').doc(widget.donorId);
+
+      // Get current user data
+      final userDoc = await userRef.get();
+      final userData = userDoc.data() ?? {};
+
+      // Get or initialize report count
+      int reportCount = (userData['reportCount'] ?? 0) + 1;
+
+      // Update user document with new report count
+      await userRef.update({
+        'reportCount': reportCount,
+        'isRestricted':
+            reportCount >= 3, // Set restriction flag when count reaches 3
+        'lastReportDate': FieldValue.serverTimestamp(),
+      });
+
+      // If report count reaches 3, create restriction notification
+      if (reportCount >= 3) {
+        // Create notification
+        await _firestore.collection('notifications').add({
+          'userId': widget.donorId,
+          'type': 'restriction',
+          'message':
+              'Your account has been restricted due to multiple reports. Please contact support@ecothreads.com to appeal.',
+          'timestamp': FieldValue.serverTimestamp(),
+          'isRead': false,
+        });
+
+        // Add to account_restrictions collection
+        await _firestore.collection('account_restrictions').add({
+          'userId': widget.donorId,
+          'reason': 'Multiple user reports',
+          'restrictionDate': FieldValue.serverTimestamp(),
+          'status': 'active',
+          'appealStatus': 'pending',
+        });
+      }
+    } catch (e) {
+      print('Error updating report count: $e');
+    }
+  }
+
   void _reportAccount() {
+    final TextEditingController detailsController = TextEditingController();
+    String? selectedReason;
+    bool isSubmitting = false;
+
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: Text('Report Account'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            DropdownButtonFormField<String>(
-              items: [
-                'Inappropriate behavior',
-                'Suspicious activity',
-                'Fake account',
-                'Other'
-              ].map((String value) {
-                return DropdownMenuItem<String>(
-                  value: value,
-                  child: Text(value),
-                );
-              }).toList(),
-              onChanged: (_) {},
-              decoration: InputDecoration(
-                border: OutlineInputBorder(),
+      builder: (context) => StatefulBuilder(
+        builder: (context, setState) => AlertDialog(
+          title: Text('Report Account'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              DropdownButtonFormField<String>(
+                value: selectedReason,
+                items: [
+                  'Inappropriate behavior',
+                  'Suspicious activity',
+                  'Fake account',
+                  'Other'
+                ].map((String value) {
+                  return DropdownMenuItem<String>(
+                    value: value,
+                    child: Text(value),
+                  );
+                }).toList(),
+                onChanged: (value) {
+                  setState(() => selectedReason = value);
+                },
+                decoration: InputDecoration(
+                  border: OutlineInputBorder(),
+                  errorText:
+                      selectedReason == null ? 'Please select a reason' : null,
+                ),
               ),
+              SizedBox(height: 16),
+              TextField(
+                controller: detailsController,
+                maxLines: 3,
+                decoration: InputDecoration(
+                  hintText: 'Provide additional details...',
+                  border: OutlineInputBorder(),
+                  errorText: detailsController.text.isEmpty ? 'Required' : null,
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: isSubmitting ? null : () => Navigator.pop(context),
+              child: Text('Cancel'),
             ),
-            SizedBox(height: 16),
-            TextField(
-              maxLines: 3,
-              decoration: InputDecoration(
-                hintText: 'Provide additional details...',
-                border: OutlineInputBorder(),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.black,
               ),
+              onPressed: isSubmitting
+                  ? null
+                  : () async {
+                      if (selectedReason == null ||
+                          detailsController.text.trim().isEmpty) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                              content:
+                                  Text('Please fill in all required fields')),
+                        );
+                        return;
+                      }
+
+                      setState(() => isSubmitting = true);
+
+                      try {
+                        await FirebaseFirestore.instance
+                            .collection('reports')
+                            .add({
+                          'reportedUserId': widget.donorId,
+                          'reportedBy': FirebaseAuth.instance.currentUser?.uid,
+                          'reason': selectedReason,
+                          'details': detailsController.text.trim(),
+                          'timestamp': FieldValue.serverTimestamp(),
+                          'status': 'pending',
+                          'type': 'account_report',
+                        });
+
+                        // Update report count and check for restrictions
+                        await _updateReportCount();
+
+                        Navigator.pop(context);
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                              content: Text('Report submitted successfully')),
+                        );
+                      } catch (e) {
+                        setState(() => isSubmitting = false);
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text('Error submitting report')),
+                        );
+                      }
+                    },
+              child: Text('Submit', style: TextStyle(color: Colors.white)),
             ),
           ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: Text('Cancel'),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.black,
-            ),
-            onPressed: () {
-              // Add report to Firestore
-              FirebaseFirestore.instance.collection('reports').add({
-                'reportedUserId': widget.donorId,
-                'reportedBy': FirebaseAuth.instance.currentUser?.uid,
-                'timestamp': FieldValue.serverTimestamp(),
-                'status': 'pending',
-                'type': 'account_report',
-              });
-              Navigator.pop(context);
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text('Report submitted successfully')),
-              );
-            },
-            child: Text('Submit', style: TextStyle(color: Colors.white)),
-          ),
-        ],
       ),
     );
   }

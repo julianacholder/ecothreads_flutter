@@ -118,7 +118,43 @@ class _DonatePageState extends State<DonatePage> {
     }
   }
 
+  Future<bool> _checkUserRestriction() async {
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) return false;
+
+      final userDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .get();
+
+      return userDoc.data()?['isRestricted'] ?? false;
+    } catch (e) {
+      print('Error checking restriction: $e');
+      return false;
+    }
+  }
+
   Future<void> _submitDonation() async {
+    // Check for restriction before allowing donation
+    bool isRestricted = await _checkUserRestriction();
+    if (isRestricted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+              'Your account is currently restricted. Please contact support@ecothreads.com'),
+          backgroundColor: Colors.red,
+          duration: Duration(seconds: 5),
+          action: SnackBarAction(
+            label: 'Dismiss',
+            onPressed: () {},
+            textColor: Colors.white,
+          ),
+        ),
+      );
+      return;
+    }
+
     if (_image == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Please select an image')),

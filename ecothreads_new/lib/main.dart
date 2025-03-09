@@ -12,6 +12,7 @@ import 'pages/login_page.dart';
 import 'pages/signup_page.dart';
 import 'pages/usermessages.dart';
 import 'pages/userprofile_page.dart';
+import 'pages/notification_service.dart';
 import 'pages/onboarding_page.dart';
 import 'constants/colors.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -116,6 +117,16 @@ class _MainScreenState extends State<MainScreen> {
   void initState() {
     super.initState();
     _selectedIndex = widget.initialIndex;
+    // Initialize notification service
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      NotificationService.initialize(context);
+    });
+  }
+
+  @override
+  void dispose() {
+    NotificationService.dispose();
+    super.dispose();
   }
 
   // List of main pages corresponding to bottom navigation items
