@@ -257,16 +257,29 @@ class _UserProfileState extends State<UserProfile>
           Expanded(
             child: Stack(
               children: [
-                Container(
-                  decoration: BoxDecoration(
-                    borderRadius: const BorderRadius.only(
-                      topLeft: Radius.circular(16),
-                      topRight: Radius.circular(16),
+                ClipRRect(
+                  borderRadius: const BorderRadius.only(
+                    topLeft: Radius.circular(16),
+                    topRight: Radius.circular(16),
+                  ),
+                  child: CachedNetworkImage(
+                    imageUrl: listing['imageUrl'] ?? '',
+                    fit: BoxFit.cover,
+                    width: double.infinity,
+                    height: double.infinity,
+                    placeholder: (context, url) => Shimmer.fromColors(
+                      baseColor: Colors.grey[300]!,
+                      highlightColor: Colors.grey[100]!,
+                      child: Container(
+                        color: Colors.white,
+                      ),
                     ),
-                    image: DecorationImage(
-                      image: NetworkImage(listing['imageUrl'] ?? ''),
-                      fit: BoxFit.cover,
-                      onError: (exception, stackTrace) {},
+                    errorWidget: (context, url, error) => Container(
+                      color: Colors.grey[200],
+                      child: Icon(
+                        Icons.image_not_supported_outlined,
+                        color: Colors.grey[400],
+                      ),
                     ),
                   ),
                 ),
@@ -1140,12 +1153,16 @@ class _UserProfileState extends State<UserProfile>
 
                           // TabBarView with consistent styling
                           SizedBox(
-                            height: 400,
+                            height: 450,
                             child: TabBarView(
                               controller: _tabController,
                               children: [
-                                _buildListingsGrid(),
-                                _buildFavoritesGrid(),
+                                SingleChildScrollView(
+                                  child: _buildListingsGrid(),
+                                ),
+                                SingleChildScrollView(
+                                  child: _buildFavoritesGrid(),
+                                ),
                               ],
                             ),
                           ),
@@ -1198,7 +1215,33 @@ class _UserProfileState extends State<UserProfile>
           .get(),
       builder: (context, listingsSnapshot) {
         if (listingsSnapshot.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator());
+          return GridView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 3,
+              crossAxisSpacing: 10,
+              mainAxisSpacing: 10,
+              childAspectRatio: 0.62,
+            ),
+            itemCount: 6, // Show 6 shimmer items
+            itemBuilder: (context, index) => Container(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(16),
+                color: Colors.white,
+              ),
+              child: Shimmer.fromColors(
+                baseColor: Colors.grey[300]!,
+                highlightColor: Colors.grey[100]!,
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                ),
+              ),
+            ),
+          );
         }
 
         if (!listingsSnapshot.hasData || listingsSnapshot.data!.docs.isEmpty) {

@@ -128,6 +128,151 @@ class _DonorProfileState extends State<DonorProfilePage> {
     );
   }
 
+  void _showOptionsMenu() {
+    showModalBottomSheet(
+      context: context,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) => Container(
+        padding: EdgeInsets.symmetric(vertical: 20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: Icon(Icons.warning_amber_rounded, color: Colors.orange),
+              title: Text('Open Dispute'),
+              onTap: () {
+                Navigator.pop(context);
+                _openDispute();
+              },
+            ),
+            ListTile(
+              leading: Icon(Icons.report_problem_outlined, color: Colors.red),
+              title: Text('Report Account'),
+              onTap: () {
+                Navigator.pop(context);
+                _reportAccount();
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _openDispute() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Open Dispute'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              maxLines: 3,
+              decoration: InputDecoration(
+                hintText: 'Describe your issue...',
+                border: OutlineInputBorder(),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text('Cancel'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.black,
+            ),
+            onPressed: () {
+              // Add dispute to Firestore
+              FirebaseFirestore.instance.collection('disputes').add({
+                'reportedUserId': widget.donorId,
+                'reportedBy': FirebaseAuth.instance.currentUser?.uid,
+                'timestamp': FieldValue.serverTimestamp(),
+                'status': 'pending',
+                'type': 'dispute',
+              });
+              Navigator.pop(context);
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text('Dispute submitted successfully')),
+              );
+            },
+            child: Text('Submit', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _reportAccount() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Report Account'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            DropdownButtonFormField<String>(
+              items: [
+                'Inappropriate behavior',
+                'Suspicious activity',
+                'Fake account',
+                'Other'
+              ].map((String value) {
+                return DropdownMenuItem<String>(
+                  value: value,
+                  child: Text(value),
+                );
+              }).toList(),
+              onChanged: (_) {},
+              decoration: InputDecoration(
+                border: OutlineInputBorder(),
+              ),
+            ),
+            SizedBox(height: 16),
+            TextField(
+              maxLines: 3,
+              decoration: InputDecoration(
+                hintText: 'Provide additional details...',
+                border: OutlineInputBorder(),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text('Cancel'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.black,
+            ),
+            onPressed: () {
+              // Add report to Firestore
+              FirebaseFirestore.instance.collection('reports').add({
+                'reportedUserId': widget.donorId,
+                'reportedBy': FirebaseAuth.instance.currentUser?.uid,
+                'timestamp': FieldValue.serverTimestamp(),
+                'status': 'pending',
+                'type': 'account_report',
+              });
+              Navigator.pop(context);
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text('Report submitted successfully')),
+              );
+            },
+            child: Text('Submit', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -328,6 +473,15 @@ class _DonorProfileState extends State<DonorProfilePage> {
                       child: IconButton(
                         icon: Icon(Icons.arrow_back, color: Colors.black),
                         onPressed: () => Navigator.pop(context),
+                      ),
+                    ),
+                    // Add menu button
+                    Positioned(
+                      top: 40,
+                      right: 10,
+                      child: IconButton(
+                        icon: Icon(Icons.more_vert, color: Colors.black),
+                        onPressed: _showOptionsMenu,
                       ),
                     ),
                     // Profile Image

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'donor_profile_page.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:shimmer/shimmer.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -469,58 +470,69 @@ class _MessageDonorState extends State<MessageDonor> {
         backgroundColor: Colors.white,
         elevation: 0,
         leading: IconButton(
-          // Fixed back button
           icon: Icon(Icons.arrow_back, color: Colors.black),
-          onPressed: () {
-            Navigator.of(context)
-                .pop(); // Use Navigator.of(context) for safer navigation
-          },
+          onPressed: () => Navigator.of(context).pop(),
         ),
-        title: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // Only show donor profile image
-            Padding(
-              padding: const EdgeInsets.only(right: 8.0),
-              child: CircleAvatar(
-                radius: 16,
-                backgroundColor: Colors.grey[300],
-                backgroundImage: _donorProfileImage != null
-                    ? NetworkImage(_donorProfileImage!)
-                    : null,
-                child: _donorProfileImage == null
-                    ? Icon(
-                        Icons.person,
-                        color: Colors.grey.shade600,
-                        size: 20,
-                      )
-                    : null,
-              ),
-            ),
-            // Donor name and item info
-            Flexible(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    widget.donorName ?? 'Donor',
-                    style: TextStyle(
-                      color: Colors.black,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 16,
-                    ),
-                    overflow: TextOverflow.ellipsis,
+        title: GestureDetector(
+          onTap: () {
+            if (widget.donorId != null) {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => DonorProfilePage(
+                    donorId: widget.donorId!,
+                    donorName: widget.donorName ?? 'Donor',
                   ),
-                  if (widget.itemName != null)
+                ),
+              );
+            }
+          },
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Only show donor profile image
+              Padding(
+                padding: const EdgeInsets.only(right: 8.0),
+                child: CircleAvatar(
+                  radius: 16,
+                  backgroundColor: Colors.grey[300],
+                  backgroundImage: _donorProfileImage != null
+                      ? NetworkImage(_donorProfileImage!)
+                      : null,
+                  child: _donorProfileImage == null
+                      ? Icon(
+                          Icons.person,
+                          color: Colors.grey.shade600,
+                          size: 20,
+                        )
+                      : null,
+                ),
+              ),
+              // Donor name and item info
+              Flexible(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
                     Text(
-                      'Item: ${widget.itemName}',
-                      style: TextStyle(color: Colors.grey, fontSize: 12),
+                      widget.donorName ?? 'Donor',
+                      style: TextStyle(
+                        color: Colors.black,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16,
+                      ),
                       overflow: TextOverflow.ellipsis,
                     ),
-                ],
+                    if (widget.itemName != null)
+                      Text(
+                        'Item: ${widget.itemName}',
+                        style: TextStyle(color: Colors.grey, fontSize: 12),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                  ],
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
         centerTitle: true,
       ),
