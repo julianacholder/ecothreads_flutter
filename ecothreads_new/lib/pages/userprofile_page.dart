@@ -40,38 +40,41 @@ class _UserProfileState extends State<UserProfile>
     super.dispose();
   }
 
-  // Fetch user data including donations and points
+  // Update the getUserData function to properly fetch points
   Future<Map<String, dynamic>> getUserData() async {
     if (user != null) {
       try {
-        DocumentSnapshot userDoc =
+        final userDoc =
             await _firestore.collection('users').doc(user!.uid).get();
-        QuerySnapshot donationsSnapshot = await _firestore
+        final userData = userDoc.data() as Map<String, dynamic>? ?? {};
+
+        final donationsSnapshot = await _firestore
             .collection('donations')
             .where('userId', isEqualTo: user!.uid)
             .get();
 
-        int totalPoints = 0;
-        for (var doc in donationsSnapshot.docs) {
-          var points = (doc.data() as Map<String, dynamic>)['points'] ?? 0;
-          if (points is double) {
-            totalPoints += points.toInt();
-          } else if (points is int) {
-            totalPoints += points;
-          }
-        }
+        // Get user's actual points from their document
+        final int userPoints = userData['points'] as int? ?? 0;
 
         return {
-          'userData': userDoc.data() as Map<String, dynamic>?,
+          'userData': userData,
           'donationsCount': donationsSnapshot.docs.length,
-          'totalPoints': totalPoints,
+          'totalPoints': userPoints,
         };
       } catch (e) {
         print('Error fetching user data: $e');
-        return {};
+        return {
+          'userData': {},
+          'donationsCount': 0,
+          'totalPoints': 0,
+        };
       }
     }
-    return {};
+    return {
+      'userData': {},
+      'donationsCount': 0,
+      'totalPoints': 0,
+    };
   }
 
   // Upload cover image to Firebase Storage
@@ -940,9 +943,11 @@ class _UserProfileState extends State<UserProfile>
                 return Center(child: Text('Error: ${snapshot.error}'));
               }
 
-              final userData = snapshot.data?['userData'] ?? {};
-              final donationsCount = snapshot.data?['donationsCount'] ?? 0;
-              final totalPoints = snapshot.data?['totalPoints'] ?? 0;
+              final userData =
+                  snapshot.data?['userData'] as Map<String, dynamic>? ?? {};
+              final donationsCount =
+                  snapshot.data?['donationsCount'] as int? ?? 0;
+              final userPoints = snapshot.data?['totalPoints'] as int? ?? 0;
 
               return SingleChildScrollView(
                 child: Column(
@@ -1141,8 +1146,10 @@ class _UserProfileState extends State<UserProfile>
                             children: [
                               _buildStatColumn(Icons.volunteer_activism_sharp,
                                   donationsCount.toString(), 'Donations'),
-                              _buildStatColumn(Icons.monetization_on,
-                                  totalPoints.toString(), 'Points'),
+                              _buildStatColumn(
+                                  Icons.monetization_on,
+                                  userPoints.toString(),
+                                  'Points'), // Display actual points
                               _buildStatColumn(Symbols.checkroom_rounded,
                                   '${donationsCount * 2}', 'Items'),
                             ],

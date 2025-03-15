@@ -12,7 +12,7 @@ import 'pages/login_page.dart';
 import 'pages/signup_page.dart';
 import 'pages/usermessages.dart';
 import 'pages/userprofile_page.dart';
-import 'pages/notification_service.dart';
+import 'services/notification_service.dart';
 import 'pages/onboarding_page.dart';
 import 'constants/colors.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -25,6 +25,8 @@ import 'package:provider/provider.dart';
 import 'pages/messagedonor.dart';
 import './pages/auth_check.dart'; // Import the AuthCheck widget
 import './models/cart_item.dart'; // Add this import
+import 'pages/notifications_page.dart';
+import 'services/messaging_service.dart';
 
 // Initialize Firebase and run the app
 import 'package:firebase_app_check/firebase_app_check.dart';
@@ -48,6 +50,9 @@ Future<void> main() async {
       androidProvider: AndroidProvider.playIntegrity,
     );
   }
+
+  // Initialize Firebase Messaging
+  await MessagingService.initialize();
 
   runApp(
     ChangeNotifierProvider(
@@ -73,29 +78,59 @@ class MyApp extends StatelessWidget {
         primaryTextTheme: GoogleFonts.nunitoSansTextTheme(),
       ),
       home: const AuthCheck(), // Use AuthCheck as the home widget
-      // Handle dynamic route generation for main screen with tab index
+      // Update the route generation to use safe navigation
       onGenerateRoute: (settings) {
         if (settings.name == '/main') {
           final int? tabIndex = settings.arguments as int?;
-          return MaterialPageRoute(
-            builder: (context) => ChangeNotifierProvider.value(
+          return PageRouteBuilder(
+            pageBuilder: (context, animation, secondaryAnimation) =>
+                ChangeNotifierProvider.value(
               value: Provider.of<CartProvider>(context, listen: false),
               child: MainScreen(initialIndex: tabIndex ?? 0),
             ),
+            transitionDuration: const Duration(milliseconds: 300),
           );
         }
-        return null;
+        // Add safe navigation for other routes
+        switch (settings.name) {
+          case '/login':
+            return _buildPageRoute(const LoginPage());
+          case '/signup':
+            return _buildPageRoute(const SignUpPage());
+          case '/loading':
+            return _buildPageRoute(const LoadingPage());
+          case '/editprofile':
+            return _buildPageRoute(const EditprofilePage());
+          case '/onboarding':
+            return _buildPageRoute(const OnboardingPage());
+          case '/message':
+            return _buildPageRoute(MessageDonor());
+          case '/settings':
+            return _buildPageRoute(SettingsPage());
+          case '/checkout':
+            return _buildPageRoute(CheckoutPage());
+          default:
+            return null;
+        }
       },
-      // Define static routes for navigation
-      routes: {
-        '/login': (context) => const LoginPage(),
-        '/signup': (context) => const SignUpPage(),
-        '/loading': (context) => const LoadingPage(),
-        '/editprofile': (context) => const EditprofilePage(),
-        '/onboarding': (context) => const OnboardingPage(),
-        '/message': (context) => MessageDonor(),
-        '/settings': (context) => SettingsPage(),
-        '/checkout': (context) => CheckoutPage(),
+    );
+  }
+
+  PageRouteBuilder _buildPageRoute(Widget page) {
+    return PageRouteBuilder(
+      pageBuilder: (context, animation, secondaryAnimation) => page,
+      transitionDuration: const Duration(milliseconds: 300),
+      transitionsBuilder: (context, animation, secondaryAnimation, child) {
+        const begin = Offset(1.0, 0.0);
+        const end = Offset.zero;
+        const curve = Curves.easeInOut;
+        var tween = Tween(begin: begin, end: end).chain(
+          CurveTween(curve: curve),
+        );
+        return SlideTransition(
+          position: animation.drive(tween),
+          child: child,
+        );
       },
     );
   }
@@ -132,7 +167,7 @@ class _MainScreenState extends State<MainScreen> {
   // List of main pages corresponding to bottom navigation items
   final List<Widget> _pages = [
     HomePage(),
-    CheckoutPage(),
+    NotificationsPage(), // Replace CheckoutPage with NotificationsPage
     DonatePage(),
     UserMessages(),
     UserProfile(),
@@ -140,6 +175,8 @@ class _MainScreenState extends State<MainScreen> {
 
   // Handle bottom navigation item selection
   void _onItemTapped(int index) {
+    if (_selectedIndex == index) return; // Prevent unnecessary rebuilds
+
     setState(() {
       _selectedIndex = index;
     });
@@ -208,6 +245,56 @@ class _MainScreenState extends State<MainScreen> {
     );
   }
 
+  Widget _buildNotificationsIcon() {
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseFirestore.instance
+          .collection('notifications')
+          .where('userId', isEqualTo: FirebaseAuth.instance.currentUser?.uid)
+          .where('isRead', isEqualTo: false)
+          .snapshots(),
+      builder: (context, snapshot) {
+        int unreadCount = snapshot.hasData ? snapshot.data!.docs.length : 0;
+
+        return Stack(
+          clipBehavior: Clip.none,
+          children: [
+            Icon(
+              _selectedIndex == 1
+                  ? Icons.notifications
+                  : Icons.notifications_outlined,
+              size: 28,
+            ),
+            if (unreadCount > 0)
+              Positioned(
+                right: -2,
+                top: -4,
+                child: Container(
+                  padding: EdgeInsets.all(4),
+                  decoration: BoxDecoration(
+                    color: Colors.red,
+                    shape: BoxShape.circle,
+                  ),
+                  constraints: BoxConstraints(
+                    minWidth: 16,
+                    minHeight: 16,
+                  ),
+                  child: Text(
+                    unreadCount > 9 ? '9+' : unreadCount.toString(),
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+              ),
+          ],
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -241,42 +328,8 @@ class _MainScreenState extends State<MainScreen> {
               label: 'Home',
             ),
             BottomNavigationBarItem(
-              icon: Stack(
-                children: [
-                  Icon(
-                    _selectedIndex == 1
-                        ? Icons.local_mall
-                        : Icons.local_mall_outlined,
-                    size: 28,
-                  ),
-                  if (context.watch<CartProvider>().items.isNotEmpty)
-                    Positioned(
-                      right: 0,
-                      top: 0,
-                      child: Container(
-                        padding: EdgeInsets.all(4),
-                        decoration: BoxDecoration(
-                          color: Colors.red,
-                          shape: BoxShape.circle,
-                        ),
-                        constraints: BoxConstraints(
-                          minWidth: 16,
-                          minHeight: 16,
-                        ),
-                        child: Text(
-                          context.watch<CartProvider>().items.length.toString(),
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 10,
-                            fontWeight: FontWeight.bold,
-                          ),
-                          textAlign: TextAlign.center,
-                        ),
-                      ),
-                    ),
-                ],
-              ),
-              label: 'Cart',
+              icon: _buildNotificationsIcon(),
+              label: 'Notifications',
             ),
             BottomNavigationBarItem(
               icon: Container(

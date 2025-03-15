@@ -18,6 +18,7 @@ class MessageDonor extends StatefulWidget {
   final String? itemName;
   final String? itemId; // Added parameter
   final String? itemImage; // Added parameter
+  final bool showShippingButton;
 
   const MessageDonor({
     Key? key,
@@ -27,6 +28,7 @@ class MessageDonor extends StatefulWidget {
     this.itemName,
     this.itemId, // Added parameter
     this.itemImage, // Added parameter
+    this.showShippingButton = false,
   }) : super(key: key);
 
   @override
@@ -50,13 +52,47 @@ class _MessageDonorState extends State<MessageDonor> {
   // Donor profile image
   String? _donorProfileImage;
 
+  // Add this helper method
+  bool get isDonor {
+    final currentUser = FirebaseAuth.instance.currentUser;
+    // The current user is the donor if they are NOT the donorId
+    // (since donorId in this case is actually the buyer's ID)
+    return currentUser?.uid != widget.donorId;
+  }
+
   @override
   void initState() {
     super.initState();
 
-    // Initialize Firebase message stream if chatId is provided
+    // Initialize Firebase message stream immediately if chatId is provided
     if (widget.chatId != null) {
-      _checkChatAccess();
+      _messagesStream = FirebaseFirestore.instance
+          .collection('chats')
+          .doc(widget.chatId)
+          .collection('messages')
+          .orderBy('timestamp', descending: false)
+          .snapshots();
+
+      // Mark chat as read
+      _markChatAsRead();
+    } else if (widget.donorId != null && widget.itemId != null) {
+      // Generate chat ID if not provided
+      final currentUser = FirebaseAuth.instance.currentUser;
+      if (currentUser != null) {
+        _generatedChatId =
+            '${currentUser.uid}_${widget.donorId}_${widget.itemId}';
+
+        // Initialize message stream with generated ID
+        _messagesStream = FirebaseFirestore.instance
+            .collection('chats')
+            .doc(_generatedChatId)
+            .collection('messages')
+            .orderBy('timestamp', descending: false)
+            .snapshots();
+
+        // Mark chat as read
+        _markChatAsRead();
+      }
     }
 
     // Fetch donor profile image if donorId is provided
@@ -140,52 +176,65 @@ class _MessageDonorState extends State<MessageDonor> {
     }
   }
 
-  void _markChatAsRead() async {
-    if (widget.chatId == null) return;
+  Future<void> _markChatAsRead() async {
+    String? chatIdToUse = widget.chatId ?? _generatedChatId;
+    if (chatIdToUse == null) return;
 
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
 
     try {
-      // Get the chat document
+      // Check if chat document exists
       final chatDoc = await FirebaseFirestore.instance
           .collection('chats')
-          .doc(widget.chatId)
+          .doc(chatIdToUse)
           .get();
 
-      final chatData = chatDoc.data();
-
-      // Only reset unread count if the last message was not from the current user
-      if (chatData != null && chatData['lastSenderId'] != user.uid) {
-        // Reset unread count for this chat
+      if (!chatDoc.exists) {
+        // Create chat document if it doesn't exist
         await FirebaseFirestore.instance
             .collection('chats')
-            .doc(widget.chatId)
-            .update({'hasUnreadMessages': false, 'unreadCount': 0});
+            .doc(chatIdToUse)
+            .set({
+          'participants': [user.uid, widget.donorId],
+          'lastMessage': '',
+          'lastMessageTime': FieldValue.serverTimestamp(),
+          'lastSenderId': user.uid,
+          'itemId': widget.itemId,
+          'itemName': widget.itemName,
+          'itemImage': widget.itemImage,
+          'hasUnreadMessages': false,
+          'unreadCount': 0,
+          'deletedFor': [],
+          'readBy': [user.uid],
+        });
       }
+
+      final batch = FirebaseFirestore.instance.batch();
+
+      // Update chat document
+      final chatRef =
+          FirebaseFirestore.instance.collection('chats').doc(chatIdToUse);
+      batch.update(chatRef, {
+        'hasUnreadMessages': false,
+        'unreadCount': 0,
+      });
 
       // Get all unread messages
       final messagesSnapshot = await FirebaseFirestore.instance
           .collection('chats')
-          .doc(widget.chatId)
+          .doc(chatIdToUse)
           .collection('messages')
+          .where('readBy', arrayContains: user.uid)
           .get();
 
-      // Batch update for better performance
-      final batch = FirebaseFirestore.instance.batch();
-
-      for (final messageDoc in messagesSnapshot.docs) {
-        final messageData = messageDoc.data();
-        final List<dynamic> readBy = messageData['readBy'] ?? [];
-
-        // If user hasn't read this message yet
-        if (!readBy.contains(user.uid)) {
-          readBy.add(user.uid);
-          batch.update(messageDoc.reference, {'readBy': readBy});
-        }
+      // Mark all messages as read
+      for (var doc in messagesSnapshot.docs) {
+        batch.update(doc.reference, {
+          'readBy': FieldValue.arrayUnion([user.uid]),
+        });
       }
 
-      // Commit the batch
       await batch.commit();
     } catch (e) {
       print('Error marking chat as read: $e');
@@ -519,6 +568,53 @@ class _MessageDonorState extends State<MessageDonor> {
     });
   }
 
+  Widget _buildFirebaseMessages() {
+    if (widget.chatId == null && _generatedChatId == null) {
+      return _buildEmptyState();
+    }
+
+    return StreamBuilder<QuerySnapshot>(
+      stream: _messagesStream,
+      builder: (context, snapshot) {
+        if (snapshot.hasError) {
+          return Center(
+            child: Text('Error loading messages'),
+          );
+        }
+
+        final messages = snapshot.data?.docs ?? [];
+        final currentUser = FirebaseAuth.instance.currentUser;
+
+        // Return ListView directly without loading check
+        return ListView.builder(
+          controller: scrollController,
+          itemCount: messages.length,
+          itemBuilder: (context, index) {
+            final messageData = messages[index].data() as Map<String, dynamic>;
+            final bool isSent = messageData['senderId'] == currentUser?.uid;
+
+            bool showDate = false;
+            if (index == 0) {
+              showDate = true;
+            } else {
+              final prevMessageData =
+                  messages[index - 1].data() as Map<String, dynamic>;
+              if (messageData['date'] != prevMessageData['date']) {
+                showDate = true;
+              }
+            }
+
+            return _buildMessageItem(
+              messageData: messageData,
+              isSent: isSent,
+              showDate: showDate,
+            );
+          },
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -592,141 +688,115 @@ class _MessageDonorState extends State<MessageDonor> {
           ),
         ),
         centerTitle: true,
-      ),
-      body: FutureBuilder<bool>(
-        future: _checkUserRestriction(),
-        builder: (context, restrictionSnapshot) {
-          if (restrictionSnapshot.connectionState == ConnectionState.waiting) {
-            return Center(child: CircularProgressIndicator());
-          }
-
-          final bool isRestricted = restrictionSnapshot.data ?? false;
-
-          return Column(
-            children: [
-              Container(
-                height: 1,
-                color: Colors.grey.shade200,
-              ),
-              const SizedBox(height: 5),
-              Expanded(
-                // Show Firebase messages if chatId is provided, otherwise show local messages
-                child: widget.chatId != null || _generatedChatId != null
-                    ? _buildFirebaseMessages()
-                    : _buildLocalMessages(),
-              ),
-              const SizedBox(height: 5),
-              ChatInputField(
-                messageController: messageController,
-                onSend:
-                    isRestricted ? null : _sendMessage, // Disable if restricted
-                onImagePick: isRestricted
-                    ? null
-                    : _sendImageMessage, // Disable if restricted
-                isDisabled: isRestricted,
-              ),
-            ],
-          );
-        },
-      ),
-    );
-  }
-
-  Widget _buildFirebaseMessages() {
-    if (widget.chatId == null && _generatedChatId == null) {
-      return _buildEmptyState();
-    }
-
-    return StreamBuilder<QuerySnapshot>(
-      stream: _messagesStream,
-      builder: (context, snapshot) {
-        if (snapshot.hasError) {
-          return _buildErrorState(snapshot.error.toString());
-        }
-
-        if (snapshot.connectionState == ConnectionState.waiting ||
-            !snapshot.hasData) {
-          return _buildLoadingState();
-        }
-
-        final messages = snapshot.data!.docs;
-        final currentUser = FirebaseAuth.instance.currentUser;
-
-        return ListView.builder(
-          controller: scrollController,
-          itemCount: messages.length,
-          itemBuilder: (context, index) {
-            final messageData = messages[index].data() as Map<String, dynamic>;
-            final bool isSent = messageData['senderId'] == currentUser?.uid;
-
-            bool showDate = false;
-            if (index == 0) {
-              showDate = true;
-            } else {
-              final prevMessageData =
-                  messages[index - 1].data() as Map<String, dynamic>;
-              if (messageData['date'] != prevMessageData['date']) {
-                showDate = true;
-              }
-            }
-
-            return _buildMessageItem(
-              messageData: messageData,
-              isSent: isSent,
-              showDate: showDate,
-            );
-          },
-        );
-      },
-    );
-  }
-
-  Widget _buildLoadingState() {
-    return ListView.builder(
-      itemCount: 6,
-      padding: EdgeInsets.symmetric(vertical: 8, horizontal: 16),
-      itemBuilder: (context, index) {
-        final bool isEven = index.isEven;
-        return Align(
-          alignment: isEven ? Alignment.centerRight : Alignment.centerLeft,
-          child: Padding(
-            padding: EdgeInsets.only(top: 8.0),
-            child: Shimmer.fromColors(
-              baseColor: Colors.grey[300]!,
-              highlightColor: Colors.grey[100]!,
-              child: Container(
-                height: 40,
-                width: 200,
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(16),
-                ),
-              ),
+        actions: [
+          if (widget.showShippingButton &&
+              isDonor) // Only show if user is donor
+            TextButton.icon(
+              icon: Icon(Icons.local_shipping, color: Colors.blue),
+              label:
+                  Text('Mark as Shipped', style: TextStyle(color: Colors.blue)),
+              onPressed: () => _markAsShipped(context),
             ),
-          ),
-        );
-      },
-    );
-  }
-
-  Widget _buildErrorState(String error) {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
+        ],
+      ),
+      body: Column(
         children: [
-          Icon(Icons.error_outline, size: 48, color: Colors.grey),
-          SizedBox(height: 16),
-          Text(
-            'Something went wrong',
-            style: TextStyle(fontSize: 16, color: Colors.grey[600]),
+          Container(
+            height: 1,
+            color: Colors.grey.shade200,
           ),
-          TextButton(
-            onPressed: _checkChatAccess,
-            child: Text('Try Again'),
+          const SizedBox(height: 5),
+          Expanded(
+            child: widget.chatId != null || _generatedChatId != null
+                ? _buildFirebaseMessages()
+                : _buildEmptyState(),
+          ),
+          const SizedBox(height: 5),
+          ChatInputField(
+            messageController: messageController,
+            onSend: _sendMessage,
+            onImagePick: _sendImageMessage,
+            isDisabled: false,
           ),
         ],
       ),
     );
+  }
+
+  Future<void> _markAsShipped(BuildContext context) async {
+    try {
+      final batch = FirebaseFirestore.instance.batch();
+      final user = FirebaseAuth.instance.currentUser;
+
+      if (user == null) return;
+
+      // Add shipping status message to chat - visible to both donor and buyer
+      final messageRef = FirebaseFirestore.instance
+          .collection('chats')
+          .doc(widget.chatId)
+          .collection('messages')
+          .doc();
+
+      batch.set(messageRef, {
+        'text': 'Item Shipped Successfully!',
+        'subtext': 'The item has been shipped and is on its way.',
+        'type': 'shipping', // Use this type to filter visibility
+        'senderId': user.uid, // Set the sender as the current user (donor)
+        'timestamp': FieldValue.serverTimestamp(),
+        'date': DateFormat('EEEE').format(DateTime.now()),
+        'time': DateFormat('h:mm:ss a').format(DateTime.now()),
+        'details': [
+          '• Item: ${widget.itemName}',
+        ],
+        'readBy': [user.uid],
+      });
+
+      // Create shipping notification for buyer
+      // This will appear in their notifications but not in chat
+      final notificationRef =
+          FirebaseFirestore.instance.collection('notifications').doc();
+
+      batch.set(notificationRef, {
+        'userId': widget.donorId,
+        'type': 'item_shipped',
+        'title': 'Item Shipped',
+        'message': 'Your item "${widget.itemName}" has been shipped!',
+        'itemId': widget.itemId,
+        'itemName': widget.itemName,
+        'timestamp': FieldValue.serverTimestamp(),
+        'isRead': false,
+      });
+
+      // Update the chat's last message, but don't mention shipping in the preview
+      // This way the buyer won't see "Item Shipped" in their chat list
+      await FirebaseFirestore.instance
+          .collection('chats')
+          .doc(widget.chatId)
+          .update({
+        'lastMessageTime': FieldValue.serverTimestamp(),
+        'lastSenderId': user.uid,
+        // For the donor's view only - won't be visible to buyer in chat list
+        'donorShippingStatus': 'shipped',
+        'shippingDate': FieldValue.serverTimestamp(),
+      });
+
+      await batch.commit();
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Buyer has been notified of shipping'),
+          backgroundColor: Colors.green,
+        ),
+      );
+    } catch (e) {
+      print('Error marking as shipped: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error updating shipping status'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
   }
 
   Widget _buildEmptyState() {
@@ -775,12 +845,130 @@ class _MessageDonorState extends State<MessageDonor> {
     );
   }
 
-  // Common message item widget without individual status text
   Widget _buildMessageItem({
     required Map<String, dynamic> messageData,
     required bool isSent,
     required bool showDate,
   }) {
+    // Check if this message is only visible to a specific user
+    if (messageData['visibleTo'] != null) {
+      final currentUser = FirebaseAuth.instance.currentUser;
+      if (currentUser == null || messageData['visibleTo'] != currentUser.uid) {
+        return SizedBox.shrink(); // Hide the message for other users
+      }
+    }
+
+    // Handle systemAction messages (e.g., "Request Confirmed")
+    if (messageData['type'] == 'systemAction') {
+      return Container(
+        margin: const EdgeInsets.symmetric(vertical: 16),
+        padding: const EdgeInsets.all(16),
+        width: double.infinity,
+        decoration: BoxDecoration(
+          color: Colors.blue.withOpacity(0.1),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: Colors.blue.withOpacity(0.3),
+            width: 1,
+          ),
+        ),
+        child: Column(
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.check_circle, color: Colors.green, size: 20),
+                SizedBox(width: 8),
+                Text(
+                  messageData['text'] ?? '',
+                  style: TextStyle(
+                    color: Colors.black87,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
+            ),
+            if (messageData['actionText'] != null) ...[
+              SizedBox(height: 8),
+              Text(
+                messageData['actionText'],
+                style: TextStyle(
+                  color: Colors.grey[600],
+                  fontSize: 13,
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ],
+          ],
+        ),
+      );
+    }
+
+    // Handle shipping messages (e.g., "Item Shipped Successfully")
+    if (messageData['type'] == 'shipping') {
+      return Container(
+        margin: const EdgeInsets.symmetric(vertical: 16, horizontal: 8),
+        padding: const EdgeInsets.all(16),
+        width: double.infinity,
+        decoration: BoxDecoration(
+          color: Colors.green.withOpacity(0.1),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: Colors.green.withOpacity(0.3),
+            width: 1,
+          ),
+        ),
+        child: Column(
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.local_shipping, color: Colors.green, size: 24),
+                SizedBox(width: 8),
+                Text(
+                  messageData['text'] ?? '',
+                  style: TextStyle(
+                    color: Colors.green[700],
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16,
+                  ),
+                ),
+              ],
+            ),
+            if (messageData['subtext'] != null) ...[
+              SizedBox(height: 8),
+              Text(
+                messageData['subtext'],
+                style: TextStyle(
+                  color: Colors.grey[600],
+                  fontSize: 14,
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ],
+            if (messageData['details'] != null) ...[
+              SizedBox(height: 12),
+              ...List<Widget>.from(
+                (messageData['details'] as List).map(
+                  (detail) => Padding(
+                    padding: const EdgeInsets.only(bottom: 4),
+                    child: Text(
+                      detail,
+                      style: TextStyle(
+                        color: Colors.grey[700],
+                        fontSize: 13,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ],
+        ),
+      );
+    }
+
+    // Regular message handling below
     return Padding(
       padding: const EdgeInsets.symmetric(
         vertical: 4.0,
