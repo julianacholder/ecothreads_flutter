@@ -638,8 +638,10 @@ class _ProductPageState extends State<ProductPage> {
                     style: TextStyle(color: Colors.grey[600]),
                   ),
                   const SizedBox(height: 16),
+                  // Size and Points Row with Material
                   Row(
                     children: [
+                      // Size info
                       const Text(
                         'Size:',
                         style: TextStyle(
@@ -659,6 +661,9 @@ class _ProductPageState extends State<ProductPage> {
                               fontSize: 16, fontWeight: FontWeight.bold),
                         ),
                       ),
+                      const SizedBox(width: 16),
+                      // Material info
+
                       const Spacer(),
                       const Text(
                         'Price: ',
@@ -672,7 +677,33 @@ class _ProductPageState extends State<ProductPage> {
                       ),
                     ],
                   ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      // Material info
+                      const Text(
+                        'Material:',
+                        style: TextStyle(
+                            fontSize: 16, fontWeight: FontWeight.bold),
+                      ),
+                      const SizedBox(width: 10),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: Colors.grey[300],
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Text(
+                          widget.item['material'] ?? 'N/A',
+                          style: const TextStyle(
+                              fontSize: 16, fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                    ],
+                  ),
+
+                  const SizedBox(height: 12),
                   GestureDetector(
                     onTap: () {
                       Navigator.push(

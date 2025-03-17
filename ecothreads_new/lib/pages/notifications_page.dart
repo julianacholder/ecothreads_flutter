@@ -430,13 +430,21 @@ class _NotificationsPageState extends State<NotificationsPage> {
     try {
       final batch = FirebaseFirestore.instance.batch();
 
+      // Get points from donation document
+      final donationDoc = await FirebaseFirestore.instance
+          .collection('donations')
+          .doc(notification['itemId'])
+          .get();
+
+      final itemPoints = donationDoc.data()?['points'] ?? 0;
+
       // Refund points to buyer
       final buyerRef = FirebaseFirestore.instance
           .collection('users')
           .doc(notification['buyerId']);
 
       batch.update(buyerRef, {
-        'points': FieldValue.increment(notification['itemPoints'] ?? 0),
+        'points': FieldValue.increment(itemPoints),
       });
 
       // Create denial notification
@@ -450,6 +458,22 @@ class _NotificationsPageState extends State<NotificationsPage> {
         'message': 'Your request has been denied. Reason: $reason',
         'itemId': notification['itemId'],
         'itemName': notification['itemName'],
+        'timestamp': FieldValue.serverTimestamp(),
+        'isRead': false,
+      });
+
+      // Create points refund notification
+      final refundNotificationRef =
+          FirebaseFirestore.instance.collection('notifications').doc();
+
+      batch.set(refundNotificationRef, {
+        'userId': notification['buyerId'],
+        'type': 'points_refunded',
+        'title': 'Points Refunded',
+        'message': '${itemPoints} points have been refunded to your account',
+        'itemId': notification['itemId'],
+        'itemName': notification['itemName'],
+        'pointsAmount': itemPoints,
         'timestamp': FieldValue.serverTimestamp(),
         'isRead': false,
       });
@@ -468,7 +492,7 @@ class _NotificationsPageState extends State<NotificationsPage> {
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Request denied successfully'),
+          content: Text('Request denied'),
           backgroundColor: Colors.green,
         ),
       );
@@ -589,6 +613,10 @@ class NotificationTile extends StatelessWidget {
         return Icons.local_shipping;
       case 'confirm_receipt':
         return Icons.check_circle_outline;
+      case 'request_denied':
+        return Icons.cancel_outlined;
+      case 'points_refunded':
+        return Icons.currency_exchange;
       case 'warning':
         return Icons.warning_amber_rounded;
       default:
@@ -601,6 +629,10 @@ class NotificationTile extends StatelessWidget {
       case 'item_request':
         return Colors.blue;
       case 'confirm_receipt':
+        return Colors.green;
+      case 'request_denied':
+        return Colors.red;
+      case 'points_refunded':
         return Colors.green;
       case 'warning':
         return Colors.orange;

@@ -730,7 +730,7 @@ class _MessageDonorState extends State<MessageDonor> {
 
       if (user == null) return;
 
-      // Add shipping status message to chat - visible to both donor and buyer
+      // Add shipping status message to chat
       final messageRef = FirebaseFirestore.instance
           .collection('chats')
           .doc(widget.chatId)
@@ -740,8 +740,8 @@ class _MessageDonorState extends State<MessageDonor> {
       batch.set(messageRef, {
         'text': 'Item Shipped Successfully!',
         'subtext': 'The item has been shipped and is on its way.',
-        'type': 'shipping', // Use this type to filter visibility
-        'senderId': user.uid, // Set the sender as the current user (donor)
+        'type': 'shipping',
+        'senderId': user.uid,
         'timestamp': FieldValue.serverTimestamp(),
         'date': DateFormat('EEEE').format(DateTime.now()),
         'time': DateFormat('h:mm:ss a').format(DateTime.now()),
@@ -751,8 +751,16 @@ class _MessageDonorState extends State<MessageDonor> {
         'readBy': [user.uid],
       });
 
+      // Update item status to sold in donations collection
+      final itemRef =
+          FirebaseFirestore.instance.collection('donations').doc(widget.itemId);
+
+      batch.update(itemRef, {
+        'status': 'sold',
+        'soldDate': FieldValue.serverTimestamp(),
+      });
+
       // Create shipping notification for buyer
-      // This will appear in their notifications but not in chat
       final notificationRef =
           FirebaseFirestore.instance.collection('notifications').doc();
 
@@ -767,24 +775,23 @@ class _MessageDonorState extends State<MessageDonor> {
         'isRead': false,
       });
 
-      // Update the chat's last message, but don't mention shipping in the preview
-      // This way the buyer won't see "Item Shipped" in their chat list
-      await FirebaseFirestore.instance
-          .collection('chats')
-          .doc(widget.chatId)
-          .update({
-        'lastMessageTime': FieldValue.serverTimestamp(),
-        'lastSenderId': user.uid,
-        // For the donor's view only - won't be visible to buyer in chat list
-        'donorShippingStatus': 'shipped',
-        'shippingDate': FieldValue.serverTimestamp(),
-      });
+      // Update chat status
+      batch.update(
+        FirebaseFirestore.instance.collection('chats').doc(widget.chatId),
+        {
+          'lastMessageTime': FieldValue.serverTimestamp(),
+          'lastSenderId': user.uid,
+          'donorShippingStatus': 'shipped',
+          'shippingDate': FieldValue.serverTimestamp(),
+          'status': 'completed', // Add chat status
+        },
+      );
 
       await batch.commit();
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Buyer has been notified of shipping'),
+          content: Text('Item marked as shipped and sold'),
           backgroundColor: Colors.green,
         ),
       );
@@ -911,10 +918,10 @@ class _MessageDonorState extends State<MessageDonor> {
         padding: const EdgeInsets.all(16),
         width: double.infinity,
         decoration: BoxDecoration(
-          color: Colors.green.withOpacity(0.1),
+          color: Colors.blue.withOpacity(0.1),
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
-            color: Colors.green.withOpacity(0.3),
+            color: Colors.blue.withOpacity(0.3),
             width: 1,
           ),
         ),
@@ -928,9 +935,8 @@ class _MessageDonorState extends State<MessageDonor> {
                 Text(
                   messageData['text'] ?? '',
                   style: TextStyle(
-                    color: Colors.green[700],
+                    color: Colors.black87,
                     fontWeight: FontWeight.bold,
-                    fontSize: 16,
                   ),
                 ),
               ],
@@ -941,7 +947,7 @@ class _MessageDonorState extends State<MessageDonor> {
                 messageData['subtext'],
                 style: TextStyle(
                   color: Colors.grey[600],
-                  fontSize: 14,
+                  fontSize: 13,
                 ),
                 textAlign: TextAlign.center,
               ),

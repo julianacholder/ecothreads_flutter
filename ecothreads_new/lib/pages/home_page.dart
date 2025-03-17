@@ -219,6 +219,7 @@ class _HomePageState extends State<HomePage> {
           'name': data['itemName'] ?? 'Unnamed Item',
           'points': data['points'] ?? 0,
           'image': data['imageUrl'] ?? '',
+          'material': data['material'] ?? 'N/A',
           'category': category, // Use normalized category
           'condition': data['condition'] ?? 'New',
           'isManual': false,
