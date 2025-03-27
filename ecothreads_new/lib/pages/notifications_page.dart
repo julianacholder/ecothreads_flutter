@@ -167,7 +167,15 @@ class _NotificationsPageState extends State<NotificationsPage> {
         elevation: 0,
       ),
       body: StreamBuilder<QuerySnapshot>(
-        stream: _notificationsStream,
+        stream: FirebaseFirestore.instance
+            .collection('notifications')
+            .where('userId', isEqualTo: FirebaseAuth.instance.currentUser?.uid)
+            .where('type', whereNotIn: [
+              'new_message',
+              'chat_started'
+            ]) // Exclude message notifications
+            .orderBy('timestamp', descending: true) // Show newest first
+            .snapshots(),
         builder: (context, snapshot) {
           if (snapshot.hasError) {
             return Center(

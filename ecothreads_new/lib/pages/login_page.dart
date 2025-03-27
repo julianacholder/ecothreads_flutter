@@ -78,31 +78,14 @@ class _LoginPageState extends State<LoginPage> {
     try {
       // Attempt login using AuthService
       User? user = await _authService.signInWithEmailPassword(email, password);
-      if (user != null) {
-        // Check if it's user's first login
-        final userDoc = await FirebaseFirestore.instance
-            .collection('users')
-            .doc(user.uid)
-            .get();
-
-        if (userDoc.exists && !userDoc.data()!.containsKey('hasSeenReferral')) {
-          if (mounted) {
-            // Show referral dialog without awaiting
-            _showReferralDialog(context, user.uid);
-            // Wait a bit to ensure dialog is shown
-            await Future.delayed(Duration(milliseconds: 100));
-          }
-        }
-
-        if (mounted) {
-          // Navigate to main screen on successful login
-          Navigator.pushNamedAndRemoveUntil(
-            context,
-            '/main',
-            (route) => false,
-            arguments: 4,
-          );
-        }
+      if (user != null && mounted) {
+        // Remove referral dialog prompt and directly navigate
+        Navigator.pushNamedAndRemoveUntil(
+          context,
+          '/main',
+          (route) => false,
+          arguments: 4,
+        );
       } else {
         setState(() {
           errorMessage = 'Invalid email or password';
@@ -303,114 +286,6 @@ class _LoginPageState extends State<LoginPage> {
       default:
         return 'Login failed. Please check your email and password and try again.';
     }
-  }
-
-  // Update referral dialog to return void
-  void _showReferralDialog(BuildContext context, String userId) {
-    final codeController = TextEditingController();
-    bool isProcessing = false;
-
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (BuildContext context) {
-        return StatefulBuilder(
-          builder: (context, setState) => AlertDialog(
-            title: Text('Welcome to EcoThreads!'),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text('Were you invited by a friend?'),
-                Text('Enter their referral code to earn 10 points!'),
-                SizedBox(height: 16),
-                TextField(
-                  controller: codeController,
-                  decoration: InputDecoration(
-                    hintText: 'Enter referral code',
-                    border: OutlineInputBorder(),
-                  ),
-                  textCapitalization: TextCapitalization.characters,
-                ),
-              ],
-            ),
-            actions: [
-              TextButton(
-                onPressed: isProcessing
-                    ? null
-                    : () async {
-                        // Mark as seen even if they skip
-                        await FirebaseFirestore.instance
-                            .collection('users')
-                            .doc(userId)
-                            .update({'hasSeenReferral': true});
-                        Navigator.of(context).pop();
-                      },
-                child: Text('Skip'),
-              ),
-              ElevatedButton(
-                onPressed: isProcessing
-                    ? null
-                    : () async {
-                        if (codeController.text.isEmpty) return;
-
-                        setState(() => isProcessing = true);
-
-                        try {
-                          final success = await _authService.submitReferralCode(
-                            codeController.text.trim().toUpperCase(),
-                            userId,
-                          );
-
-                          if (success && mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                content: Text('Success! You earned 10 points!'),
-                                backgroundColor: Colors.green,
-                              ),
-                            );
-                            Navigator.of(context).pop();
-                          } else if (mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                content: Text('Invalid referral code'),
-                                backgroundColor: Colors.red,
-                              ),
-                            );
-                          }
-                        } catch (e) {
-                          if (mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                  content:
-                                      Text('Error processing referral code')),
-                            );
-                          }
-                        } finally {
-                          if (mounted) {
-                            setState(() => isProcessing = false);
-                          }
-                        }
-                      },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.black,
-                ),
-                child: isProcessing
-                    ? SizedBox(
-                        height: 20,
-                        width: 20,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          valueColor:
-                              AlwaysStoppedAnimation<Color>(Colors.white),
-                        ),
-                      )
-                    : Text('Submit', style: TextStyle(color: Colors.white)),
-              ),
-            ],
-          ),
-        );
-      },
-    );
   }
 
   @override

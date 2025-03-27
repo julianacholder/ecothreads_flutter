@@ -171,35 +171,45 @@ class AuthService {
           await _auth.signInWithCredential(credential);
 
       if (userCredential.user != null) {
-        // Generate referral code
-        final referralCode =
-            userCredential.user!.uid.substring(0, 8).toUpperCase();
+        // Check if user already exists
+        final userDoc = await _firestore
+            .collection('users')
+            .doc(userCredential.user!.uid)
+            .get();
 
-        // Save user data with referral code
-        await _firestore.collection('users').doc(userCredential.user!.uid).set({
-          'fullName': fullName,
-          'username': username,
-          'email': email,
-          'createdAt': FieldValue.serverTimestamp(),
-          'signInMethod': 'google',
-          'photoURL': userCredential.user!.photoURL,
-          'referralCode': referralCode,
-          'points': 0,
-          'hasSeenReferral': false,
-        });
+        if (!userDoc.exists) {
+          // Only for new users: Generate referral code and save user data
+          final referralCode =
+              userCredential.user!.uid.substring(0, 8).toUpperCase();
 
-        // Create referral prompt notification
-        await _firestore.collection('notifications').add({
-          'userId': userCredential.user!.uid,
-          'type': 'referral_request',
-          'title': 'Welcome to EcoThreads!',
-          'message':
-              'Were you invited by a friend? Enter their referral code to earn points!',
-          'timestamp': FieldValue.serverTimestamp(),
-          'isRead': false,
-          'needsAction': true,
-          'points': 10,
-        });
+          await _firestore
+              .collection('users')
+              .doc(userCredential.user!.uid)
+              .set({
+            'fullName': fullName,
+            'username': username,
+            'email': email,
+            'createdAt': FieldValue.serverTimestamp(),
+            'signInMethod': 'google',
+            'photoURL': userCredential.user!.photoURL,
+            'referralCode': referralCode,
+            'points': 0,
+            'hasSeenReferral': false,
+          });
+
+          // Only create notification for new users
+          await _firestore.collection('notifications').add({
+            'userId': userCredential.user!.uid,
+            'type': 'referral_request',
+            'title': 'Welcome to EcoThreads!',
+            'message':
+                'Were you invited by a friend? Enter their referral code to earn points!',
+            'timestamp': FieldValue.serverTimestamp(),
+            'isRead': false,
+            'needsAction': true,
+            'points': 10,
+          });
+        }
       }
 
       return userCredential.user;
