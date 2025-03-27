@@ -1113,59 +1113,6 @@ class _HomePageState extends State<HomePage> {
   }
 
   // Add method to build notification icon with badge
-  Widget _buildNotificationIcon() {
-    return StreamBuilder<QuerySnapshot>(
-      stream: FirebaseFirestore.instance
-          .collection('notifications')
-          .where('userId', isEqualTo: FirebaseAuth.instance.currentUser?.uid)
-          .where('isRead', isEqualTo: false)
-          .where('type', whereNotIn: [
-            'new_message',
-            'chat_started'
-          ]) // Exclude message notifications
-          .orderBy('timestamp', descending: true) // Order by newest first
-          .snapshots(),
-      builder: (context, snapshot) {
-        if (!snapshot.hasData) return Icon(Icons.notifications_none);
-
-        final unreadCount = snapshot.data?.docs.length ?? 0;
-
-        return Stack(
-          children: [
-            Icon(unreadCount > 0
-                ? Icons.notifications
-                : Icons.notifications_none),
-            if (unreadCount > 0)
-              Positioned(
-                right: -3,
-                top: -3,
-                child: Container(
-                  padding: EdgeInsets.all(4),
-                  decoration: BoxDecoration(
-                    color: Colors.red,
-                    shape: BoxShape.circle,
-                    border: Border.all(color: Colors.white, width: 2),
-                  ),
-                  constraints: BoxConstraints(
-                    minWidth: 16,
-                    minHeight: 16,
-                  ),
-                  child: Text(
-                    unreadCount > 99 ? '99+' : unreadCount.toString(),
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 10,
-                      fontWeight: FontWeight.bold,
-                    ),
-                    textAlign: TextAlign.center,
-                  ),
-                ),
-              ),
-          ],
-        );
-      },
-    );
-  }
 
   // Clean up resources when widget is disposed
   @override

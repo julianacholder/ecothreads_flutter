@@ -248,41 +248,58 @@ class _MainScreenState extends State<MainScreen> {
 
   Widget _buildNotificationsIcon() {
     final user = FirebaseAuth.instance.currentUser;
-    if (user == null) return Icon(Icons.notifications_outlined);
+    if (user == null) return Icon(Icons.notifications_none);
 
     return StreamBuilder<QuerySnapshot>(
       stream: FirebaseFirestore.instance
           .collection('notifications')
           .where('userId', isEqualTo: user.uid)
           .where('isRead', isEqualTo: false)
-          .where('type', isNotEqualTo: 'new_message')
-          .where('doNotCount', isEqualTo: false)
           .snapshots(),
       builder: (context, snapshot) {
-        final unreadCount = snapshot.hasData ? snapshot.data!.docs.length : 0;
+        if (!snapshot.hasData) return Icon(Icons.notifications_none);
+
+        // Filter out message notifications from the count
+        final filteredDocs = snapshot.data!.docs.where((doc) {
+          final data = doc.data() as Map<String, dynamic>;
+          final type = data['type'] as String?;
+
+          // Exclude 'new_message' and 'chat_started' notifications from count
+          return type != 'new_message' && type != 'chat_started';
+        }).toList();
+
+        final unreadCount = filteredDocs.length;
 
         return Stack(
+          clipBehavior: Clip.none,
           children: [
-            Icon(Icons.notifications_outlined),
+            Icon(
+              unreadCount > 0 || _selectedIndex == 1
+                  ? Icons.notifications
+                  : Icons.notifications_none,
+              size: 26,
+            ),
             if (unreadCount > 0)
               Positioned(
-                right: 0,
-                top: 0,
+                right: -5,
+                top: -5,
                 child: Container(
-                  padding: EdgeInsets.all(1),
+                  padding: EdgeInsets.all(4),
                   decoration: BoxDecoration(
                     color: Colors.red,
-                    borderRadius: BorderRadius.circular(6),
+                    shape: BoxShape.circle,
+                    border: Border.all(color: Colors.white, width: 2),
                   ),
                   constraints: BoxConstraints(
-                    minWidth: 12,
-                    minHeight: 12,
+                    minWidth: 18,
+                    minHeight: 18,
                   ),
                   child: Text(
-                    unreadCount > 99 ? '99+' : unreadCount.toString(),
+                    unreadCount > 9 ? '9+' : unreadCount.toString(),
                     style: TextStyle(
                       color: Colors.white,
-                      fontSize: 8,
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold,
                     ),
                     textAlign: TextAlign.center,
                   ),
