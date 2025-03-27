@@ -38,6 +38,9 @@ class _HomePageState extends State<HomePage> {
   List<String> _selectedConditions = [];
   String _selectedSort = 'Newest';
 
+  // Add this method near other state variables
+  Map<String, Map<String, dynamic>> _donorRatings = {};
+
   @override
   void initState() {
     super.initState();
@@ -48,66 +51,203 @@ class _HomePageState extends State<HomePage> {
 
   Future<void> _shareInviteLink() async {
     try {
-      // Generate a simple invite code
-      final String inviteCode = user?.uid.substring(0, 8) ?? '12345';
-
-      // Show a dialog with the invite code
+      // Show loading indicator
       showDialog(
         context: context,
+        barrierDismissible: false,
         builder: (BuildContext context) {
-          return AlertDialog(
-            title: Text('Invite Friends'),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text('Share this code with your friends:'),
-                SizedBox(height: 10),
-                SelectableText(
-                  inviteCode,
-                  style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 18,
-                  ),
-                ),
-                SizedBox(height: 20),
-                Text('You will earn 5 points for each friend who joins!'),
-              ],
+          return Dialog(
+            child: Padding(
+              padding: const EdgeInsets.all(20.0),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  CircularProgressIndicator(),
+                  SizedBox(width: 20),
+                  Text("Loading your referral code..."),
+                ],
+              ),
             ),
-            actions: [
-              TextButton(
-                onPressed: () {
-                  Navigator.of(context).pop();
-                },
-                child: Text('Cancel'),
-              ),
-              ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.black,
-                ),
-                onPressed: () async {
-                  // Add points to user for attempting to share
-                  await _addPointsToUser();
-                  Navigator.of(context).pop();
-                },
-                child: Text(
-                  'Got it!',
-                  style: TextStyle(color: Colors.white),
-                ),
-              ),
-            ],
           );
         },
       );
+
+      // Get user data to access their referral code
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) {
+        Navigator.of(context).pop(); // Close loading dialog
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Please log in to share your referral code')),
+        );
+        return;
+      }
+
+      // Get user document
+      final userDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .get();
+
+      // Close loading dialog
+      Navigator.of(context).pop();
+
+      if (!userDoc.exists) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('User profile not found')),
+        );
+        return;
+      }
+
+      final userData = userDoc.data();
+      if (userData == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('User data is empty')),
+        );
+        return;
+      }
+
+      // Safely extract referral code
+      final String referralCode = userData['referralCode'] ?? '';
+
+      // Debug: Print to console
+      print('Retrieved referral code: $referralCode');
+
+      if (referralCode.isEmpty) {
+        // If code is empty, try to generate one
+        await _generateReferralCode(user.uid);
+
+        // Fetch updated user data with new code
+        final updatedDoc = await FirebaseFirestore.instance
+            .collection('users')
+            .doc(user.uid)
+            .get();
+
+        final String newCode = updatedDoc.data()?['referralCode'] ?? '';
+
+        if (newCode.isEmpty) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Could not generate a referral code')),
+          );
+          return;
+        }
+
+        // Show dialog with the new code
+        _showReferralCodeDialog(newCode);
+      } else {
+        // Show dialog with existing code
+        _showReferralCodeDialog(referralCode);
+      }
     } catch (e) {
       print('Error with invite: $e');
-      // Use a simple SnackBar instead of toast
+      // Make sure to close loading dialog if there's an error
+      Navigator.of(context, rootNavigator: true)
+          .popUntil((route) => route.isFirst);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Something went wrong. Please try again.'),
-          duration: Duration(seconds: 2),
+          content: Text('Unable to generate invite code: $e'),
+          duration: Duration(seconds: 3),
         ),
       );
     }
+  }
+
+  // Helper method to generate a referral code
+  Future<void> _generateReferralCode(String userId) async {
+    try {
+      // Generate new code from user ID
+      final referralCode = userId.substring(0, 8).toUpperCase();
+
+      // Save to Firestore
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(userId)
+          .update({'referralCode': referralCode});
+    } catch (e) {
+      print('Error generating referral code: $e');
+      throw e;
+    }
+  }
+
+  void _showReferralCodeDialog(String referralCode) {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(15),
+          ),
+          title: Text(
+            'Invite Friends',
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              fontSize: 20,
+            ),
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                'Share your referral code with friends:',
+                style: TextStyle(fontSize: 16),
+              ),
+              SizedBox(height: 20),
+              Container(
+                padding: EdgeInsets.all(15),
+                decoration: BoxDecoration(
+                  color: Colors.grey[100],
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: Colors.grey[300]!),
+                ),
+                child: SelectableText(
+                  referralCode,
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 24,
+                    letterSpacing: 2,
+                  ),
+                ),
+              ),
+              SizedBox(height: 20),
+              Text(
+                'You and your friend will each earn 10 points!',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 14,
+                  color: Colors.grey[700],
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: Text('Cancel'),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.black,
+              ),
+              onPressed: () async {
+                await Share.share(
+                  'Join me on EcoThreads! Use my referral code: $referralCode to get 10 points when you sign up!',
+                );
+                Navigator.of(context).pop();
+
+                // Add points to user
+                _addPointsToUser();
+              },
+              child: Padding(
+                padding: EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+                child: Text(
+                  'Share Code',
+                  style: TextStyle(color: Colors.white),
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
   }
 
 // New method to add points to the user after sharing
@@ -694,23 +834,51 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  // Build individual item card
+  // Add this method before _buildItemCard
+  Future<void> _loadDonorRating(String? donorId) async {
+    if (donorId == null) return;
+
+    try {
+      final ratingStats = await _firestore
+          .collection('users')
+          .doc(donorId)
+          .collection('rating_stats')
+          .doc('stats')
+          .get();
+
+      if (ratingStats.exists) {
+        setState(() {
+          _donorRatings[donorId] = {
+            'average': ratingStats.data()?['average'] ?? 0.0,
+            'count': ratingStats.data()?['count'] ?? 0,
+          };
+        });
+      }
+    } catch (e) {
+      print('Error loading donor rating: $e');
+    }
+  }
+
   Widget _buildItemCard(Map<String, dynamic> item) {
-    // Add null checks for item values
     final String name = item['name']?.toString() ?? 'Unnamed Item';
     final String condition = item['condition']?.toString() ?? 'New';
     final int points = int.tryParse(item['points']?.toString() ?? '0') ?? 0;
     final String imageUrl = item['image']?.toString() ?? '';
+    final String? donorId = item['userId']?.toString();
+
+    // Load donor rating if not already loaded
+    if (donorId != null && !_donorRatings.containsKey(donorId)) {
+      _loadDonorRating(donorId);
+    }
+
+    // Get rating data
+    final double rating = _donorRatings[donorId]?['average']?.toDouble() ?? 5.0;
 
     return GestureDetector(
-      onTap: () {
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (context) => ProductPage(item: item),
-          ),
-        );
-      },
+      onTap: () => Navigator.push(
+        context,
+        MaterialPageRoute(builder: (context) => ProductPage(item: item)),
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -768,8 +936,8 @@ class _HomePageState extends State<HomePage> {
               ),
               const SizedBox(width: 4),
               const Icon(Icons.star, color: Colors.amber, size: 12),
-              const Text(
-                ' 5.0',
+              Text(
+                ' ${rating.toStringAsFixed(1)}',
                 style: TextStyle(
                   fontSize: 11,
                   fontWeight: FontWeight.w500,

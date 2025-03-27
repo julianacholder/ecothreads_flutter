@@ -246,6 +246,7 @@ class _SignUpPageState extends State<SignUpPage> {
     final email = _controllerEmail.text.trim();
     final password = _controllerPassword.text;
 
+    // Basic validation
     if (fullName.isEmpty ||
         username.isEmpty ||
         !isValidEmail(email) ||
@@ -260,35 +261,31 @@ class _SignUpPageState extends State<SignUpPage> {
     }
 
     try {
-      // Check if the email is already registered
-      final userSnapshot = await FirebaseFirestore.instance
-          .collection('users')
-          .where('email', isEqualTo: email)
-          .get();
+      // Check if email exists first
+      bool emailExists = await _authService.checkIfEmailExists(email);
 
-      if (userSnapshot.docs.isNotEmpty) {
+      if (emailExists) {
         setState(() {
           errorMessage =
-              'This email is already registered. Please use a different email.';
+              'This email is already registered. Please try logging in instead.';
           _isLoading = false;
         });
         return;
       }
 
+      // Send OTP only if email doesn't exist
       final verificationService = EmailVerificationService();
-
-      // ✅ Ensure OTP is only sent if email is NOT registered
       bool otpSent = await verificationService.sendOTP(email);
 
       if (!otpSent) {
         setState(() {
-          errorMessage = 'Failed to send OTP. Please try again.';
+          errorMessage = 'Failed to send verification code. Please try again.';
           _isLoading = false;
         });
         return;
       }
 
-      // ✅ Navigate to OTP verification screen
+      // Navigate to verification screen
       if (mounted) {
         Navigator.push(
           context,
@@ -305,34 +302,130 @@ class _SignUpPageState extends State<SignUpPage> {
     } catch (e) {
       print("❌ Registration Error: $e");
       setState(() {
-        errorMessage = e.toString();
+        errorMessage =
+            'An error occurred during registration. Please try again.';
         _isLoading = false;
       });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
     }
   }
 
-  // String _getFirebaseAuthErrorMessage(FirebaseAuthException e) {
-  //   switch (e.code) {
-  //     case 'email-already-in-use':
-  //       return 'This email is already registered. Please use a different email.';
-  //     case 'invalid-email':
-  //       return 'The email address is invalid. Please enter a valid email.';
-  //     case 'operation-not-allowed':
-  //       return 'Email/password accounts are not enabled. Please contact support.';
-  //     case 'weak-password':
-  //       return 'The password is too weak. Please use a stronger password.';
-  //     case 'network-request-failed':
-  //       return 'Network error. Please check your internet connection.';
-  //     case 'too-many-requests':
-  //       return 'Too many attempts. Please try again later.';
-  //     case 'user-disabled':
-  //       return 'This account has been disabled. Please contact support.';
-  //     case 'requires-recent-login':
-  //       return 'This operation is sensitive and requires recent authentication. Please log in again.';
-  //     default:
-  //       return e.message ?? 'An unexpected error occurred. Please try again.';
-  //   }
-  // }
+  // Add new method for error message display
+  Widget _buildErrorMessage() {
+    if (errorMessage == null || errorMessage!.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(12),
+      margin: const EdgeInsets.only(bottom: 16),
+      decoration: BoxDecoration(
+        color: Colors.red.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.red.withOpacity(0.3)),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.error_outline, color: Colors.red, size: 20),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              errorMessage!,
+              style: const TextStyle(
+                color: Colors.red,
+                fontSize: 14,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Update error message helper
+  String _getSignUpErrorMessage(FirebaseAuthException e) {
+    switch (e.code) {
+      case 'email-already-in-use':
+        return 'An account already exists with this email. Please try logging in instead.';
+      case 'invalid-email':
+        return 'Please enter a valid email address.';
+      case 'operation-not-allowed':
+        return 'Email/password accounts are not enabled. Please contact support.';
+      case 'weak-password':
+        return 'Please choose a stronger password. Use at least 6 characters with a mix of letters and numbers.';
+      default:
+        return 'Sign up failed. Please check your information and try again.';
+    }
+  }
+
+  // Update sign up method
+  Future<void> _signUp() async {
+    setState(() {
+      errorMessage = '';
+      _isLoading = true;
+    });
+
+    // Validation checks
+    if (_controllerFullName.text.trim().isEmpty) {
+      setState(() {
+        errorMessage = 'Please enter your full name';
+        _isLoading = false;
+      });
+      return;
+    }
+
+    if (!isValidEmail(_controllerEmail.text.trim())) {
+      setState(() {
+        errorMessage = 'Please enter a valid email address';
+        _isLoading = false;
+      });
+      return;
+    }
+
+    if (_controllerPassword.text.length < 6) {
+      setState(() {
+        errorMessage = 'Password must be at least 6 characters long';
+        _isLoading = false;
+      });
+      return;
+    }
+
+    try {
+      // Attempt signup
+      User? user = await _authService.signUpWithEmailAndPassword(
+        _controllerEmail.text.trim(),
+        _controllerPassword.text,
+        _controllerFullName.text.trim(),
+      );
+
+      if (user != null && mounted) {
+        Navigator.pushNamedAndRemoveUntil(
+          context,
+          '/main',
+          (route) => false,
+        );
+      }
+    } on FirebaseAuthException catch (e) {
+      setState(() {
+        errorMessage = _getSignUpErrorMessage(e);
+      });
+    } catch (e) {
+      setState(() {
+        errorMessage = 'An unexpected error occurred. Please try again.';
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
+  }
 
   String getValidationErrorMessage(
       String fullName, String username, String email, String password) {
@@ -374,14 +467,6 @@ class _SignUpPageState extends State<SignUpPage> {
       }
     }
     return false;
-  }
-
-  Widget _errorMessage() {
-    return Text(
-      errorMessage == '' ? '' : 'Error: $errorMessage',
-      style: const TextStyle(color: Colors.red),
-      textAlign: TextAlign.center,
-    );
   }
 
   late final List<TapGestureRecognizer> _recognizers;
@@ -431,7 +516,7 @@ class _SignUpPageState extends State<SignUpPage> {
                   ),
                 ),
                 const SizedBox(height: 12),
-                _errorMessage(),
+                _buildErrorMessage(),
                 const SizedBox(height: 20),
 
                 TextField(

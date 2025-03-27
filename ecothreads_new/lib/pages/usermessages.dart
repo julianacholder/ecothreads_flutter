@@ -380,6 +380,8 @@ class UserMessages extends StatelessWidget {
     }
   }
 
+  // In your buildMessageItem method in UserMessages class:
+
   Widget buildMessageItem(
     BuildContext context, {
     required String chatId,
@@ -426,6 +428,8 @@ class UserMessages extends StatelessWidget {
                 donorName: userName,
                 itemName: itemName != 'Item' ? itemName : null,
                 itemImage: itemImage,
+                // Add this parameter to show the shipping button
+                showShippingButton: true,
               ),
             ),
           );

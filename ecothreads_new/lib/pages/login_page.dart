@@ -4,6 +4,7 @@ import '../auth_service.dart';
 import 'signup_page.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 // StatefulWidget for login functionality
 class LoginPage extends StatefulWidget {
@@ -78,6 +79,21 @@ class _LoginPageState extends State<LoginPage> {
       // Attempt login using AuthService
       User? user = await _authService.signInWithEmailPassword(email, password);
       if (user != null) {
+        // Check if it's user's first login
+        final userDoc = await FirebaseFirestore.instance
+            .collection('users')
+            .doc(user.uid)
+            .get();
+
+        if (userDoc.exists && !userDoc.data()!.containsKey('hasSeenReferral')) {
+          if (mounted) {
+            // Show referral dialog without awaiting
+            _showReferralDialog(context, user.uid);
+            // Wait a bit to ensure dialog is shown
+            await Future.delayed(Duration(milliseconds: 100));
+          }
+        }
+
         if (mounted) {
           // Navigate to main screen on successful login
           Navigator.pushNamedAndRemoveUntil(
@@ -240,22 +256,161 @@ class _LoginPageState extends State<LoginPage> {
     );
   }
 
-  // Convert Firebase error codes to user-friendly messages
+  // Update the error message display widget
+  Widget _buildErrorMessage() {
+    if (errorMessage == null || errorMessage!.isEmpty)
+      return const SizedBox.shrink();
+
+    return Container(
+      padding: const EdgeInsets.all(12),
+      margin: const EdgeInsets.only(bottom: 16),
+      decoration: BoxDecoration(
+        color: Colors.red.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.red.withOpacity(0.3)),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.error_outline, color: Colors.red, size: 20),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              errorMessage!,
+              style: const TextStyle(
+                color: Colors.red,
+                fontSize: 14,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Update the error message helper
   String _getFirebaseAuthErrorMessage(FirebaseAuthException e) {
     switch (e.code) {
       case 'user-not-found':
-        return 'No user found with this email';
+        return 'We couldn\'t find an account with this email address. Please check your email or create a new account.';
       case 'wrong-password':
-        return 'Wrong password provided';
+        return 'Incorrect password. Please try again or use "Reset Password" if you forgot it.';
       case 'invalid-email':
-        return 'Invalid email address';
+        return 'Please enter a valid email address.';
       case 'user-disabled':
-        return 'This account has been disabled';
+        return 'This account has been disabled. Please contact support for assistance.';
       case 'too-many-requests':
-        return 'Too many attempts. Please try again later';
+        return 'Too many login attempts. Please try again later or reset your password.';
       default:
-        return e.message ?? 'An error occurred during login';
+        return 'Login failed. Please check your email and password and try again.';
     }
+  }
+
+  // Update referral dialog to return void
+  void _showReferralDialog(BuildContext context, String userId) {
+    final codeController = TextEditingController();
+    bool isProcessing = false;
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext context) {
+        return StatefulBuilder(
+          builder: (context, setState) => AlertDialog(
+            title: Text('Welcome to EcoThreads!'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text('Were you invited by a friend?'),
+                Text('Enter their referral code to earn 10 points!'),
+                SizedBox(height: 16),
+                TextField(
+                  controller: codeController,
+                  decoration: InputDecoration(
+                    hintText: 'Enter referral code',
+                    border: OutlineInputBorder(),
+                  ),
+                  textCapitalization: TextCapitalization.characters,
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: isProcessing
+                    ? null
+                    : () async {
+                        // Mark as seen even if they skip
+                        await FirebaseFirestore.instance
+                            .collection('users')
+                            .doc(userId)
+                            .update({'hasSeenReferral': true});
+                        Navigator.of(context).pop();
+                      },
+                child: Text('Skip'),
+              ),
+              ElevatedButton(
+                onPressed: isProcessing
+                    ? null
+                    : () async {
+                        if (codeController.text.isEmpty) return;
+
+                        setState(() => isProcessing = true);
+
+                        try {
+                          final success = await _authService.submitReferralCode(
+                            codeController.text.trim().toUpperCase(),
+                            userId,
+                          );
+
+                          if (success && mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text('Success! You earned 10 points!'),
+                                backgroundColor: Colors.green,
+                              ),
+                            );
+                            Navigator.of(context).pop();
+                          } else if (mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text('Invalid referral code'),
+                                backgroundColor: Colors.red,
+                              ),
+                            );
+                          }
+                        } catch (e) {
+                          if (mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                  content:
+                                      Text('Error processing referral code')),
+                            );
+                          }
+                        } finally {
+                          if (mounted) {
+                            setState(() => isProcessing = false);
+                          }
+                        }
+                      },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.black,
+                ),
+                child: isProcessing
+                    ? SizedBox(
+                        height: 20,
+                        width: 20,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          valueColor:
+                              AlwaysStoppedAnimation<Color>(Colors.white),
+                        ),
+                      )
+                    : Text('Submit', style: TextStyle(color: Colors.white)),
+              ),
+            ],
+          ),
+        );
+      },
+    );
   }
 
   @override
@@ -298,15 +453,7 @@ class _LoginPageState extends State<LoginPage> {
                 const SizedBox(height: 32),
 
                 // Error message display
-                if (errorMessage != null && errorMessage!.isNotEmpty)
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 16),
-                    child: Text(
-                      errorMessage!,
-                      style: const TextStyle(color: Colors.red),
-                      textAlign: TextAlign.center,
-                    ),
-                  ),
+                _buildErrorMessage(),
 
                 // Email input field
                 const Text(

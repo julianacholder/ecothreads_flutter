@@ -6,6 +6,8 @@ import 'package:shimmer/shimmer.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../services/notification_service.dart';
 import 'messagedonor.dart';
+import 'itemdetail.dart';
+import '../auth_service.dart'; // Add this import
 
 class NotificationsPage extends StatefulWidget {
   const NotificationsPage({Key? key}) : super(key: key);
@@ -32,6 +34,9 @@ class _NotificationsPageState extends State<NotificationsPage> {
       _notificationsStream = _firestore
           .collection('notifications')
           .where('userId', isEqualTo: user.uid)
+          // Add this where clause to filter out message notifications
+          .where('type', isNotEqualTo: 'new_message')
+          .orderBy('type') // Required when using isNotEqualTo
           .orderBy('timestamp', descending: true)
           .snapshots();
 
@@ -41,6 +46,21 @@ class _NotificationsPageState extends State<NotificationsPage> {
         });
       }
     }
+  }
+
+  Widget _buildUnreadCount(String userId) {
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseFirestore.instance
+          .collection('notifications')
+          .where('userId', isEqualTo: userId)
+          .where('isRead', isEqualTo: false)
+          .where('type', isNotEqualTo: 'new_message')
+          .snapshots(),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData) return Text('0');
+        return Text(snapshot.data!.docs.length.toString());
+      },
+    );
   }
 
   Widget _buildShimmerLoading() {
@@ -261,7 +281,73 @@ class _NotificationsPageState extends State<NotificationsPage> {
           }
         }
         break;
-      // ...existing cases...
+      case 'item_shipped':
+        // Only show dialog if it's the first view or isFirstView is not set
+        if (notification['isFirstView'] != false) {
+          _showShippingConfirmationDialog(context, notification);
+          // Mark as viewed for future
+          FirebaseFirestore.instance
+              .collection('notifications')
+              .doc(notification['notificationId'])
+              .update({'isFirstView': false});
+        } else {
+          // Show a message that action has already been taken
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                  'You have already responded to this shipment notification'),
+              duration: Duration(seconds: 2),
+            ),
+          );
+        }
+        break;
+      case 'shipped_followup':
+        if (notification['isFirstView'] != false) {
+          _showShippingConfirmationDialog(context, notification);
+          // Mark as viewed for future
+          FirebaseFirestore.instance
+              .collection('notifications')
+              .doc(notification['notificationId'])
+              .update({'isFirstView': false});
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('You have already responded to this notification'),
+              duration: Duration(seconds: 2),
+            ),
+          );
+        }
+        break;
+      case 'new_donation':
+        // Navigate to the item detail page if we have the item data
+        if (notification['itemId'] != null) {
+          // Create the item map with the available data
+          final item = {
+            'id': notification['itemId'],
+            'name': notification['itemName'],
+            'image': notification['imageUrl'],
+            'userId': notification['donorId'],
+            'userFullName': notification['donorName'],
+          };
+
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => ProductPage(item: item),
+            ),
+          );
+        }
+        break;
+      case 'referral_request':
+        _showReferralDialog(context, notification);
+        break;
+      case 'referral_bonus':
+        // Just mark as read
+        FirebaseFirestore.instance
+            .collection('notifications')
+            .doc(notification['id'])
+            .update({'isRead': true});
+        break;
     }
   }
 
@@ -579,6 +665,343 @@ class _NotificationsPageState extends State<NotificationsPage> {
       );
     }
   }
+
+  void _showShippingConfirmationDialog(
+      BuildContext context, Map<String, dynamic> notification) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Row(
+          children: [
+            Icon(Icons.local_shipping, color: Colors.blue),
+            SizedBox(width: 8),
+            Text('Item Received?'),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Have you received your item?'),
+            SizedBox(height: 8),
+            Text(
+              '${notification['itemName']}',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => _showDisputeDialog(context, notification),
+            child: Text(
+              'No, Open Dispute',
+              style: TextStyle(color: Colors.red),
+            ),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.green,
+            ),
+            onPressed: () => _confirmItemReceived(context, notification),
+            child: Text(
+              'Yes, Received',
+              style: TextStyle(color: Colors.white),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showDisputeDialog(
+      BuildContext context, Map<String, dynamic> notification) {
+    final reasonController = TextEditingController();
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Row(
+          children: [
+            Icon(Icons.warning_amber, color: Colors.orange),
+            SizedBox(width: 8),
+            Text('Open Dispute'),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text('Please explain the issue:'),
+            SizedBox(height: 16),
+            TextField(
+              controller: reasonController,
+              decoration: InputDecoration(
+                hintText: 'Enter your reason...',
+                border: OutlineInputBorder(),
+              ),
+              maxLines: 3,
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text('Cancel'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.orange,
+            ),
+            onPressed: () => _submitDispute(
+              context,
+              notification,
+              reasonController.text,
+            ),
+            child: Text('Submit Dispute'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _submitDispute(BuildContext context,
+      Map<String, dynamic> notification, String reason) async {
+    if (reason.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Please provide a reason for the dispute')),
+      );
+      return;
+    }
+
+    try {
+      final batch = FirebaseFirestore.instance.batch();
+
+      // Create dispute document
+      final disputeRef =
+          FirebaseFirestore.instance.collection('disputes').doc();
+      batch.set(disputeRef, {
+        'itemId': notification['itemId'],
+        'itemName': notification['itemName'],
+        'buyerId': FirebaseAuth.instance.currentUser?.uid,
+        'sellerId': notification['sellerId'],
+        'reason': reason,
+        'status': 'open',
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+
+      // Create notification for admin
+      final adminNotificationRef =
+          FirebaseFirestore.instance.collection('admin_notifications').doc();
+      batch.set(adminNotificationRef, {
+        'type': 'dispute',
+        'itemId': notification['itemId'],
+        'disputeId': disputeRef.id,
+        'status': 'new',
+        'timestamp': FieldValue.serverTimestamp(),
+      });
+
+      // Update item status
+      final itemRef = FirebaseFirestore.instance
+          .collection('donations')
+          .doc(notification['itemId']);
+      batch.update(itemRef, {'status': 'disputed'});
+
+      // Mark the shipping notification as handled
+      final shippingNotificationRef = FirebaseFirestore.instance
+          .collection('notifications')
+          .doc(notification['notificationId']);
+
+      batch.update(shippingNotificationRef,
+          {'isFirstView': false, 'actionTaken': 'disputed'});
+
+      await batch.commit();
+
+      Navigator.of(context).pop(); // Close dispute dialog
+      Navigator.of(context).pop(); // Close confirmation dialog
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Dispute submitted successfully'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+    } catch (e) {
+      print('Error submitting dispute: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error submitting dispute'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  Future<void> _confirmItemReceived(
+      BuildContext context, Map<String, dynamic> notification) async {
+    try {
+      final batch = FirebaseFirestore.instance.batch();
+      final user = FirebaseAuth.instance.currentUser;
+
+      if (user == null) return;
+
+      // Get donation document first to get seller ID
+      final donationDoc = await FirebaseFirestore.instance
+          .collection('donations')
+          .doc(notification['itemId'])
+          .get();
+
+      if (!donationDoc.exists) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: Item not found'),
+            backgroundColor: Colors.red,
+          ),
+        );
+        return;
+      }
+
+      final sellerId = donationDoc.data()?['userId'];
+      if (sellerId == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: Seller information not found'),
+            backgroundColor: Colors.red,
+          ),
+        );
+        return;
+      }
+
+      // Get seller reference with verified ID
+      final sellerRef =
+          FirebaseFirestore.instance.collection('users').doc(sellerId);
+
+      // Update seller's points (+10 for successful donation)
+      batch.update(sellerRef, {
+        'points': FieldValue.increment(10),
+      });
+
+      // Update item status
+      final itemRef = FirebaseFirestore.instance
+          .collection('donations')
+          .doc(notification['itemId']);
+      batch.update(itemRef, {
+        'status': 'completed',
+        'completedAt': FieldValue.serverTimestamp(),
+      });
+
+      // Create delivery confirmation notification for seller
+      final confirmNotificationRef =
+          FirebaseFirestore.instance.collection('notifications').doc();
+
+      // Create points earned notification for seller
+      final pointsNotificationRef =
+          FirebaseFirestore.instance.collection('notifications').doc();
+      batch.set(pointsNotificationRef, {
+        'userId': sellerId, // Use verified seller ID
+        'type': 'points_earned',
+        'title': 'Points Earned',
+        'message': 'You earned 10 points for your successful donation!',
+        'itemId': notification['itemId'],
+        'itemName': notification['itemName'],
+        'points': 10,
+        'timestamp': FieldValue.serverTimestamp(),
+        'isRead': false,
+      });
+
+      // Mark the shipping notification as handled
+      final shippingNotificationRef = FirebaseFirestore.instance
+          .collection('notifications')
+          .doc(notification['notificationId']);
+
+      batch.update(shippingNotificationRef,
+          {'isFirstView': false, 'actionTaken': 'confirmed'});
+
+      await batch.commit();
+
+      Navigator.pop(context); // Close confirmation dialog
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Delivery confirmed successfully'),
+          backgroundColor: Colors.green,
+        ),
+      );
+    } catch (e) {
+      print('Error confirming delivery: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error confirming delivery'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  void _showReferralDialog(
+      BuildContext context, Map<String, dynamic> notification) {
+    final codeController = TextEditingController();
+    final authService = AuthService(); // Create instance
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Enter Referral Code'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text('Enter your friend\'s referral code to earn 10 points!'),
+            SizedBox(height: 16),
+            TextField(
+              controller: codeController,
+              decoration: InputDecoration(
+                hintText: 'Enter 8-digit referral code',
+                border: OutlineInputBorder(),
+              ),
+              textCapitalization: TextCapitalization.characters,
+              textInputAction: TextInputAction.done,
+              maxLength: 8,
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text('Skip'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.black,
+            ),
+            onPressed: () async {
+              final code = codeController.text.trim();
+              if (code.length != 8) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('Please enter a valid 8-digit code')),
+                );
+                return;
+              }
+
+              final success = await authService.submitReferralCode(
+                code,
+                FirebaseAuth.instance.currentUser!.uid,
+              );
+
+              Navigator.pop(context);
+
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(
+                    success ? 'You earned 10 points!' : 'Invalid referral code',
+                  ),
+                  backgroundColor: success ? Colors.green : Colors.red,
+                ),
+              );
+            },
+            child: Text('Submit', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class NotificationTile extends StatelessWidget {
@@ -619,6 +1042,12 @@ class NotificationTile extends StatelessWidget {
         return Icons.currency_exchange;
       case 'warning':
         return Icons.warning_amber_rounded;
+      case 'points_earned':
+        return Icons.stars;
+      case 'shipped_followup':
+        return Icons.local_shipping;
+      case 'new_donation':
+        return Icons.card_giftcard;
       default:
         return Icons.notifications_outlined;
     }
@@ -636,6 +1065,12 @@ class NotificationTile extends StatelessWidget {
         return Colors.green;
       case 'warning':
         return Colors.orange;
+      case 'points_earned':
+        return Colors.amber;
+      case 'shipped_followup':
+        return Colors.orange;
+      case 'new_donation':
+        return Colors.green;
       default:
         return Colors.grey;
     }

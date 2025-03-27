@@ -1,55 +1,62 @@
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import '../auth_service.dart';
 
 class EmailVerificationService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseFunctions _functions = FirebaseFunctions.instance;
-  final FirebaseAuth _auth = FirebaseAuth.instance;
+  final AuthService _authService = AuthService();
 
-  // ✅ Send OTP only if the email is NOT registered
   Future<bool> sendOTP(String email) async {
     try {
-      // 🚨 Deprecated API - Consider replacing with Identity Platform solution
-      final List<String> methods =
-          await _auth.fetchSignInMethodsForEmail(email);
-
-      if (methods.isNotEmpty) {
-        throw 'Email is already registered. Please use a different email.';
+      // Check if email exists using AuthService
+      final emailExists = await _authService.checkIfEmailExists(email);
+      if (emailExists) {
+        print('Email already exists: $email');
+        return false;
       }
 
-      // ✅ Generate a 6-digit OTP
+      // Generate new OTP
       String otp =
           (100000 + DateTime.now().millisecondsSinceEpoch % 900000).toString();
 
-      // ✅ Store OTP in Firestore before sending email
-      await _firestore.collection('pending_registrations').doc(email).set({
-        'otp': otp,
-        'createdAt': FieldValue.serverTimestamp(),
-        'expiresAt':
-            Timestamp.fromDate(DateTime.now().add(const Duration(minutes: 5))),
+      // Store OTP in Firestore with transaction to ensure atomicity
+      await _firestore.runTransaction((transaction) async {
+        // Delete any existing OTP first
+        final otpRef =
+            _firestore.collection('pending_registrations').doc(email);
+        transaction.delete(otpRef);
+
+        // Create new OTP document
+        transaction.set(otpRef, {
+          'otp': otp,
+          'createdAt': FieldValue.serverTimestamp(),
+          'expiresAt':
+              Timestamp.fromDate(DateTime.now().add(Duration(minutes: 5))),
+          'attempts': 0
+        });
       });
 
-      // ✅ Send email
+      // Send OTP email
       final result = await _functions.httpsCallable('sendOTPEmail').call({
         'email': email,
         'otp': otp,
       });
 
       if (result.data['success'] != true) {
-        // Cleanup Firestore if email fails
+        // Clean up if email failed to send
         await _firestore
             .collection('pending_registrations')
             .doc(email)
             .delete();
-        throw 'Failed to send verification email.';
+        return false;
       }
 
-      print("✅ OTP sent successfully to $email");
-      return true; // ✅ OTP sent successfully
+      return true;
     } catch (e) {
-      print("❌ sendOTP Error: $e");
-      return false; // ✅ OTP sending failed
+      print('Error sending OTP: $e');
+      return false;
     }
   }
 
@@ -86,14 +93,18 @@ class EmailVerificationService {
             .delete();
 
         try {
-          // ✅ Create Firebase Auth User
-          final userCredential = await _auth.createUserWithEmailAndPassword(
+          // Use the new method
+          final userCredential =
+              await _authService.createUserWithEmailAndPassword(
             email: email,
             password: password,
           );
 
           if (userCredential.user != null) {
-            // ✅ Store user data in Firestore
+            // Create initial user document with referral code
+            final referralCode =
+                userCredential.user!.uid.substring(0, 8).toUpperCase();
+
             await _firestore
                 .collection('users')
                 .doc(userCredential.user!.uid)
@@ -105,6 +116,22 @@ class EmailVerificationService {
               'signInMethod': 'email',
               'emailVerified': true,
               'verifiedAt': FieldValue.serverTimestamp(),
+              'referralCode': referralCode,
+              'points': 0,
+              'hasSeenReferral': false,
+            });
+
+            // Create referral prompt notification
+            await _firestore.collection('notifications').add({
+              'userId': userCredential.user!.uid,
+              'type': 'referral_request',
+              'title': 'Welcome to EcoThreads!',
+              'message':
+                  'Were you invited by a friend? Enter their referral code to earn points!',
+              'timestamp': FieldValue.serverTimestamp(),
+              'isRead': false,
+              'needsAction': true,
+              'points': 10,
             });
 
             return userCredential.user;

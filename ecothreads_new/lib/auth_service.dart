@@ -79,28 +79,57 @@ class AuthService {
     }
   }
 
-  // Register with email and password
-  Future<User?> registerWithEmailPassword(String email, String password,
-      {String? fullName, String? username}) async {
+  Future<bool> checkIfEmailExists(String email) async {
     try {
-      UserCredential userCredential = await _auth
-          .createUserWithEmailAndPassword(email: email, password: password);
+      // First check Firebase Auth
+      final methods = await _auth.fetchSignInMethodsForEmail(email);
+      if (methods.isNotEmpty) {
+        return true;
+      }
 
-      // Update user profile with displayName if provided
-      if (fullName != null && userCredential.user != null) {
+      // Then check Firestore
+      final userQuery = await _firestore
+          .collection('users')
+          .where('email', isEqualTo: email)
+          .get();
+
+      // Check pending registrations
+      final pendingDoc =
+          await _firestore.collection('pending_registrations').doc(email).get();
+
+      return userQuery.docs.isNotEmpty || pendingDoc.exists;
+    } catch (e) {
+      print('Error checking email existence: $e');
+      rethrow;
+    }
+  }
+
+  Future<User?> registerWithEmailPassword(
+    String email,
+    String password, {
+    String? fullName,
+    String? username,
+  }) async {
+    try {
+      UserCredential userCredential =
+          await _auth.createUserWithEmailAndPassword(
+        email: email,
+        password: password,
+      );
+
+      if (fullName != null) {
         await userCredential.user!.updateDisplayName(fullName);
       }
 
-      // Save user data to Firestore
-      if (userCredential.user != null) {
-        await _saveUserToFirestore(userCredential.user!,
-            displayName: fullName, username: username);
-      }
+      await _saveUserToFirestore(
+        userCredential.user!,
+        displayName: fullName,
+        username: username,
+      );
 
       return userCredential.user;
-    } on FirebaseAuthException catch (e) {
-      print('Registration Error: ${e.code} - ${e.message}');
-      throw e;
+    } catch (e) {
+      rethrow;
     }
   }
 
@@ -141,10 +170,36 @@ class AuthService {
       final UserCredential userCredential =
           await _auth.signInWithCredential(credential);
 
-      // Save user data to Firestore
       if (userCredential.user != null) {
-        await _saveUserToFirestore(userCredential.user!,
-            displayName: fullName, username: username);
+        // Generate referral code
+        final referralCode =
+            userCredential.user!.uid.substring(0, 8).toUpperCase();
+
+        // Save user data with referral code
+        await _firestore.collection('users').doc(userCredential.user!.uid).set({
+          'fullName': fullName,
+          'username': username,
+          'email': email,
+          'createdAt': FieldValue.serverTimestamp(),
+          'signInMethod': 'google',
+          'photoURL': userCredential.user!.photoURL,
+          'referralCode': referralCode,
+          'points': 0,
+          'hasSeenReferral': false,
+        });
+
+        // Create referral prompt notification
+        await _firestore.collection('notifications').add({
+          'userId': userCredential.user!.uid,
+          'type': 'referral_request',
+          'title': 'Welcome to EcoThreads!',
+          'message':
+              'Were you invited by a friend? Enter their referral code to earn points!',
+          'timestamp': FieldValue.serverTimestamp(),
+          'isRead': false,
+          'needsAction': true,
+          'points': 10,
+        });
       }
 
       return userCredential.user;
@@ -267,6 +322,148 @@ class AuthService {
     } catch (e) {
       print('Error fetching user data: $e');
       return null;
+    }
+  }
+
+  // Sign up with email and password
+  Future<User?> signUpWithEmailAndPassword(
+      String email, String password, String fullName) async {
+    try {
+      final credential = await _auth.createUserWithEmailAndPassword(
+        email: email,
+        password: password,
+      );
+
+      if (credential.user != null) {
+        // Generate referral code from first 8 characters of user ID
+        final referralCode = credential.user!.uid.substring(0, 8).toUpperCase();
+
+        // Create user document
+        await _firestore.collection('users').doc(credential.user!.uid).set({
+          'email': email,
+          'fullName': fullName,
+          'points': 0,
+          'createdAt': FieldValue.serverTimestamp(),
+          'referralCode': referralCode, // Store the referral code
+        });
+
+        // Create referral notification
+        await _firestore.collection('notifications').add({
+          'userId': credential.user!.uid,
+          'type': 'referral_request',
+          'title': 'Welcome to EcoThreads!',
+          'message':
+              'Were you invited by a friend? Enter their referral code to earn points!',
+          'timestamp': FieldValue.serverTimestamp(),
+          'isRead': false,
+          'needsAction': true,
+          'points': 10,
+        });
+
+        return credential.user;
+      }
+    } catch (e) {
+      print('Error during sign up: $e');
+      rethrow;
+    }
+    return null;
+  }
+
+  // Only keep this version of submitReferralCode and remove the other one
+  Future<bool> submitReferralCode(
+      String referralCode, String currentUserId) async {
+    try {
+      // Check if user has already used a referral code
+      final currentUserDoc =
+          await _firestore.collection('users').doc(currentUserId).get();
+
+      if (currentUserDoc.data()?['hasUsedReferralCode'] == true) {
+        print('User has already used a referral code');
+        return false;
+      }
+
+      // Find user with this referral code
+      final referrerQuery = await _firestore
+          .collection('users')
+          .where('referralCode', isEqualTo: referralCode.toUpperCase())
+          .limit(1)
+          .get();
+
+      if (referrerQuery.docs.isEmpty) {
+        print('Invalid referral code');
+        return false;
+      }
+
+      final referrerId = referrerQuery.docs.first.id;
+
+      // Don't allow self-referral
+      if (referrerId == currentUserId) {
+        print('Cannot use own referral code');
+        return false;
+      }
+
+      final batch = _firestore.batch();
+
+      // Update referrer's points
+      final referrerRef = _firestore.collection('users').doc(referrerId);
+      batch.update(referrerRef, {
+        'points': FieldValue.increment(10),
+      });
+
+      // Update new user's points and mark as referred
+      final newUserRef = _firestore.collection('users').doc(currentUserId);
+      batch.update(newUserRef, {
+        'points': FieldValue.increment(10),
+        'referredBy': referrerId,
+        'hasUsedReferralCode': true,
+        'hasSeenReferral': true,
+      });
+
+      // Create notification for referrer
+      final referrerNotificationRef =
+          _firestore.collection('notifications').doc();
+      batch.set(referrerNotificationRef, {
+        'userId': referrerId,
+        'type': 'referral_bonus',
+        'title': 'Referral Bonus!',
+        'message': 'Someone used your referral code! You earned 10 points!',
+        'timestamp': FieldValue.serverTimestamp(),
+        'isRead': false,
+        'points': 10,
+      });
+
+      // Create notification for new user
+      final userNotificationRef = _firestore.collection('notifications').doc();
+      batch.set(userNotificationRef, {
+        'userId': currentUserId,
+        'type': 'referral_bonus',
+        'title': 'Welcome Bonus!',
+        'message': 'You earned 10 points for using a referral code!',
+        'timestamp': FieldValue.serverTimestamp(),
+        'isRead': false,
+        'points': 10,
+      });
+
+      await batch.commit();
+      return true;
+    } catch (e) {
+      print('Error processing referral: $e');
+      return false;
+    }
+  }
+
+  Future<UserCredential> createUserWithEmailAndPassword({
+    required String email,
+    required String password,
+  }) async {
+    try {
+      return await _auth.createUserWithEmailAndPassword(
+        email: email,
+        password: password,
+      );
+    } catch (e) {
+      print('Error creating user: $e');
+      rethrow;
     }
   }
 }

@@ -22,6 +22,137 @@ class DonorProfilePage extends StatefulWidget {
 
 class _DonorProfileState extends State<DonorProfilePage> {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  bool _isSubscribed = false;
+
+  // Add new state variables
+  double _averageRating = 0.0;
+  int _ratingCount = 0;
+  bool _hasRated = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkSubscriptionStatus();
+    _loadDonorRating();
+    _checkIfUserHasRated();
+  }
+
+  Future<void> _checkSubscriptionStatus() async {
+    final currentUser = FirebaseAuth.instance.currentUser;
+    if (currentUser == null) return;
+
+    try {
+      final doc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(currentUser.uid)
+          .collection('donor_subscriptions')
+          .doc(widget.donorId)
+          .get();
+
+      if (mounted) {
+        setState(() {
+          _isSubscribed = doc.exists;
+        });
+      }
+    } catch (e) {
+      print('Error checking subscription status: $e');
+    }
+  }
+
+  Future<void> _toggleNotifications() async {
+    final currentUser = FirebaseAuth.instance.currentUser;
+    if (currentUser == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Please log in to subscribe to notifications')),
+      );
+      return;
+    }
+
+    try {
+      final batch = FirebaseFirestore.instance.batch();
+
+      // Reference to the subscription in both locations
+      final userSubscriptionRef = FirebaseFirestore.instance
+          .collection('users')
+          .doc(currentUser.uid)
+          .collection('donor_subscriptions')
+          .doc(widget.donorId);
+
+      final donorSubscriberRef = FirebaseFirestore.instance
+          .collection('users')
+          .doc(widget.donorId)
+          .collection('subscribers')
+          .doc(currentUser.uid);
+
+      // Reference to donor's document to track subscriber count
+      final donorRef =
+          FirebaseFirestore.instance.collection('users').doc(widget.donorId);
+
+      if (_isSubscribed) {
+        // Remove subscriptions
+        batch.delete(userSubscriptionRef);
+        batch.delete(donorSubscriberRef);
+        // Decrement subscriber count
+        batch.update(donorRef, {'subscriberCount': FieldValue.increment(-1)});
+      } else {
+        // Add subscriptions
+        batch.set(userSubscriptionRef, {
+          'donorId': widget.donorId,
+          'donorName': widget.donorName,
+          'subscribedAt': FieldValue.serverTimestamp(),
+        });
+
+        batch.set(donorSubscriberRef, {
+          'userId': currentUser.uid,
+          'userName': currentUser.displayName,
+          'subscribedAt': FieldValue.serverTimestamp(),
+        });
+
+        // Increment subscriber count and check milestones
+        final donorDoc = await donorRef.get();
+        final currentCount = (donorDoc.data()?['subscriberCount'] ?? 0) as int;
+        final newCount = currentCount + 1;
+
+        batch.update(donorRef, {'subscriberCount': newCount});
+
+        // Check if this is a milestone (multiple of 5)
+        if (newCount % 5 == 0) {
+          // Create milestone notification
+          final notificationRef =
+              FirebaseFirestore.instance.collection('notifications').doc();
+
+          batch.set(notificationRef, {
+            'userId': widget.donorId,
+            'type': 'subscriber_milestone',
+            'title': 'Subscriber Milestone! 🎉',
+            'message': 'Congratulations! You now have $newCount subscribers',
+            'timestamp': FieldValue.serverTimestamp(),
+            'isRead': false,
+          });
+        }
+      }
+
+      await batch.commit();
+
+      setState(() {
+        _isSubscribed = !_isSubscribed;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(_isSubscribed
+              ? 'You will be notified when ${widget.donorName} posts new items'
+              : 'Notifications turned off for ${widget.donorName}'),
+          duration: Duration(seconds: 2),
+        ),
+      );
+    } catch (e) {
+      print('Error toggling notifications: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error updating notification preferences')),
+      );
+    }
+  }
 
   Future<Map<String, dynamic>> getDonorData() async {
     try {
@@ -33,99 +164,192 @@ class _DonorProfileState extends State<DonorProfilePage> {
           .where('status', isEqualTo: 'available')
           .get();
 
+      // Get subscribers count
+      final subscribersSnapshot = await _firestore
+          .collection('users')
+          .doc(widget.donorId)
+          .collection('subscribers')
+          .get();
+
       return {
         'userData': userDoc.data() ?? {},
         'listings': donationsSnapshot.docs.map((doc) => doc.data()).toList(),
-        'donationsCount': donationsSnapshot.docs.length,
+        'subscribersCount': subscribersSnapshot.docs.length,
       };
     } catch (e) {
       print('Error fetching donor data: $e');
       return {
         'userData': {},
         'listings': [],
-        'donationsCount': 0,
+        'subscribersCount': 0,
       };
     }
   }
 
-  Future<void> _startChat() async {
-    final currentUser = FirebaseAuth.instance.currentUser;
-    if (currentUser == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Please log in to message the donor')),
-      );
-      return;
-    }
-
+  Future<void> _loadDonorRating() async {
     try {
-      // Generate a unique chat ID
-      String chatId = '${currentUser.uid}_${widget.donorId}';
+      final ratingStats = await _firestore
+          .collection('users')
+          .doc(widget.donorId)
+          .collection('rating_stats')
+          .doc('stats')
+          .get();
 
-      // Check if chat already exists
-      final chatDoc = await _firestore.collection('chats').doc(chatId).get();
-
-      if (!chatDoc.exists) {
-        // Create new chat document only with donor information
-        await _firestore.collection('chats').doc(chatId).set({
-          'participants': [currentUser.uid, widget.donorId],
-          'lastMessage': '',
-          'lastMessageTime': FieldValue.serverTimestamp(),
-          'lastSenderId': '',
-          'hasUnreadMessages': false,
-          'unreadCount': 0,
-          'deletedFor': [],
-          'donorName': widget.donorName, // Store only donor name
+      if (mounted && ratingStats.exists) {
+        setState(() {
+          _averageRating = (ratingStats.data()?['average'] ?? 0.0).toDouble();
+          _ratingCount = ratingStats.data()?['count'] ?? 0;
         });
       }
+    } catch (e) {
+      print('Error loading donor rating: $e');
+    }
+  }
+
+  Future<void> _checkIfUserHasRated() async {
+    final currentUser = FirebaseAuth.instance.currentUser;
+    if (currentUser == null) return;
+
+    try {
+      final rating = await _firestore
+          .collection('users')
+          .doc(widget.donorId)
+          .collection('ratings')
+          .doc(currentUser.uid)
+          .get();
 
       if (mounted) {
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (context) => MessageDonor(
-              chatId: chatId,
-              donorId: widget.donorId,
-              donorName: widget.donorName, // Pass only donor name
-            ),
-          ),
-        );
+        setState(() {
+          _hasRated = rating.exists;
+        });
       }
     } catch (e) {
-      print('Error starting chat: $e');
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error starting conversation')),
-      );
+      print('Error checking user rating: $e');
     }
   }
 
   void _showRatingDialog() {
+    if (_hasRated) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('You have already rated this donor')),
+      );
+      return;
+    }
+
+    double selectedRating = 0;
+
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: Text('Rate ${widget.donorName}'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: List.generate(
-                5,
-                (index) => IconButton(
-                  icon: Icon(Icons.star_border),
-                  onPressed: () {
-                    // Implement rating logic
-                    Navigator.pop(context);
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('Thank you for rating!')),
-                    );
-                  },
+      builder: (context) => StatefulBuilder(
+        builder: (context, setState) => AlertDialog(
+          title: Text('Rate ${widget.donorName}'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: List.generate(
+                  5,
+                  (index) => IconButton(
+                    icon: Icon(
+                      index < selectedRating ? Icons.star : Icons.star_border,
+                      color: Colors.amber,
+                    ),
+                    onPressed: () {
+                      setState(() {
+                        selectedRating = index + 1.0;
+                      });
+                    },
+                  ),
                 ),
               ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: Text('Cancel'),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.black,
+              ),
+              onPressed: selectedRating == 0
+                  ? null
+                  : () => _submitRating(selectedRating),
+              child: Text('Submit', style: TextStyle(color: Colors.white)),
             ),
           ],
         ),
       ),
     );
+  }
+
+  Future<void> _submitRating(double rating) async {
+    final currentUser = FirebaseAuth.instance.currentUser;
+    if (currentUser == null) return;
+
+    try {
+      final batch = _firestore.batch();
+
+      // Add individual rating
+      final ratingRef = _firestore
+          .collection('users')
+          .doc(widget.donorId)
+          .collection('ratings')
+          .doc(currentUser.uid);
+
+      batch.set(ratingRef, {
+        'rating': rating,
+        'userId': currentUser.uid,
+        'timestamp': FieldValue.serverTimestamp(),
+      });
+
+      // Update rating stats
+      final statsRef = _firestore
+          .collection('users')
+          .doc(widget.donorId)
+          .collection('rating_stats')
+          .doc('stats');
+
+      final statsDoc = await statsRef.get();
+      if (statsDoc.exists) {
+        final currentAvg = statsDoc.data()?['average'] ?? 0.0;
+        final currentCount = statsDoc.data()?['count'] ?? 0;
+        final newCount = currentCount + 1;
+        final newAvg = ((currentAvg * currentCount) + rating) / newCount;
+
+        batch.update(statsRef, {
+          'average': newAvg,
+          'count': newCount,
+        });
+      } else {
+        batch.set(statsRef, {
+          'average': rating,
+          'count': 1,
+        });
+      }
+
+      await batch.commit();
+
+      // Update state
+      setState(() {
+        _hasRated = true;
+        _ratingCount++;
+        _averageRating =
+            ((_averageRating * (_ratingCount - 1)) + rating) / _ratingCount;
+      });
+
+      Navigator.pop(context);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Thank you for rating!')),
+      );
+    } catch (e) {
+      print('Error submitting rating: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error submitting rating')),
+      );
+    }
   }
 
   void _showOptionsMenu() {
@@ -561,7 +785,7 @@ class _DonorProfileState extends State<DonorProfilePage> {
 
           final userData = snapshot.data!['userData'];
           final listings = snapshot.data!['listings'] as List;
-          final donationsCount = snapshot.data!['donationsCount'] as int;
+          final subscribersCount = snapshot.data!['subscribersCount'] as int;
 
           return SingleChildScrollView(
             child: Column(
@@ -679,19 +903,25 @@ class _DonorProfileState extends State<DonorProfilePage> {
                           const SizedBox(width: 10),
                           Expanded(
                             child: ElevatedButton.icon(
-                              onPressed: _startChat,
-                              icon: Icon(Icons.message, color: Colors.white),
+                              icon: Icon(
+                                _isSubscribed
+                                    ? Icons.notifications_active
+                                    : Icons.notifications_none,
+                                color: Colors.white,
+                              ),
                               label: Text(
-                                'Message',
+                                _isSubscribed ? 'Subscribed' : 'Get Notified',
                                 style: TextStyle(color: Colors.white),
                               ),
                               style: ElevatedButton.styleFrom(
-                                backgroundColor: Colors.black,
+                                backgroundColor:
+                                    _isSubscribed ? Colors.green : Colors.black,
                                 padding: EdgeInsets.symmetric(vertical: 12),
                                 shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(10),
+                                  borderRadius: BorderRadius.circular(8),
                                 ),
                               ),
+                              onPressed: _toggleNotifications,
                             ),
                           ),
                         ],
@@ -701,8 +931,12 @@ class _DonorProfileState extends State<DonorProfilePage> {
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                         children: [
-                          _buildStatColumn(Icons.volunteer_activism_sharp,
-                              donationsCount.toString(), 'Donations'),
+                          _buildStatColumn(
+                              Icons.person_add, // Changed icon
+                              snapshot.data!['subscribersCount']
+                                  .toString(), // Changed value
+                              'Subscribers' // Changed label
+                              ),
                           _buildStatColumn(Icons.star, '5.0', 'Rating'),
                           _buildStatColumn(
                               Icons.sell, '${listings.length}', 'Active'),
@@ -745,6 +979,35 @@ class _DonorProfileState extends State<DonorProfilePage> {
   }
 
   Widget _buildStatColumn(IconData icon, String value, String label) {
+    if (label == 'Rating') {
+      return Column(
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Icon(Icons.star, size: 20, color: Colors.amber),
+              const SizedBox(width: 4),
+              Text(
+                _averageRating.toStringAsFixed(1),
+                style: TextStyle(
+                  fontWeight: FontWeight.w900,
+                  fontSize: 16,
+                  color: Colors.black,
+                ),
+              ),
+            ],
+          ),
+          Text(
+            '$_ratingCount ${_ratingCount == 1 ? 'Rating' : 'Ratings'}',
+            style: TextStyle(
+              fontWeight: FontWeight.normal,
+              fontSize: 14,
+              color: Colors.black,
+            ),
+          ),
+        ],
+      );
+    }
     return Column(
       children: [
         Row(

@@ -19,12 +19,46 @@ class MessagingService {
     token = await messaging.getToken();
     print('FCM Token: $token');
 
+    // Create separate channels for messages and other notifications
+    const androidMessageChannel = AndroidNotificationChannel(
+      'messages', // channel ID
+      'Messages', // channel name
+      description: 'Chat messages', // channel description
+      importance: Importance.high,
+      showBadge: true,
+    );
+
+    const androidNotificationChannel = AndroidNotificationChannel(
+      'notifications',
+      'Notifications',
+      description: 'General notifications',
+      importance: Importance.high,
+      showBadge: true,
+    );
+
+    // Create the channels
+    await _localNotifications
+        .resolvePlatformSpecificImplementation<
+            AndroidFlutterLocalNotificationsPlugin>()
+        ?.createNotificationChannel(androidMessageChannel);
+    await _localNotifications
+        .resolvePlatformSpecificImplementation<
+            AndroidFlutterLocalNotificationsPlugin>()
+        ?.createNotificationChannel(androidNotificationChannel);
+
     // Initialize local notifications
     const initializationSettings = InitializationSettings(
       android: AndroidInitializationSettings('@mipmap/ic_launcher'),
       iOS: DarwinInitializationSettings(),
     );
-    await _localNotifications.initialize(initializationSettings);
+
+    await _localNotifications.initialize(
+      initializationSettings,
+      onDidReceiveNotificationResponse: (details) {
+        // Handle notification tap
+        print('Notification tapped: ${details.payload}');
+      },
+    );
 
     // Handle background messages
     FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
@@ -47,6 +81,32 @@ class MessagingService {
   }
 
   static void _handleForegroundMessage(RemoteMessage message) async {
+    // Skip creating notification document for messages
+    if (message.data['type'] == 'new_message') {
+      // Only show local notification
+      RemoteNotification? notification = message.notification;
+      AndroidNotification? android = message.notification?.android;
+
+      if (notification != null && android != null) {
+        await _localNotifications.show(
+          notification.hashCode,
+          notification.title,
+          notification.body,
+          NotificationDetails(
+            android: AndroidNotificationDetails(
+              'messages', // Use messages channel
+              'Messages',
+              importance: Importance.high,
+              priority: Priority.high,
+              icon: '@mipmap/ic_launcher',
+            ),
+          ),
+          payload: message.data.toString(),
+        );
+      }
+      return;
+    }
+
     RemoteNotification? notification = message.notification;
     AndroidNotification? android = message.notification?.android;
 

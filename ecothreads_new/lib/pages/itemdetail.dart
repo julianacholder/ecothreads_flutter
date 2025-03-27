@@ -26,11 +26,36 @@ class _ProductPageState extends State<ProductPage> {
   bool isFavorite = false;
   bool isLoading = true;
   bool isProcessing = false; // Add this line
+  double _donorRating = 0.0;
+  int _ratingCount = 0;
 
   @override
   void initState() {
     super.initState();
+    _loadDonorRating();
     _checkIfFavorite();
+  }
+
+  Future<void> _loadDonorRating() async {
+    if (widget.item['userId'] == null) return;
+
+    try {
+      final ratingStats = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(widget.item['userId'])
+          .collection('rating_stats')
+          .doc('stats')
+          .get();
+
+      if (mounted && ratingStats.exists) {
+        setState(() {
+          _donorRating = (ratingStats.data()?['average'] ?? 0.0).toDouble();
+          _ratingCount = ratingStats.data()?['count'] ?? 0;
+        });
+      }
+    } catch (e) {
+      print('Error loading donor rating: $e');
+    }
   }
 
   Future<void> _checkIfFavorite() async {
@@ -382,12 +407,12 @@ class _ProductPageState extends State<ProductPage> {
           },
         );
       }
+      ;
 
-      // Show local notification to the donor
-      await NotificationService.showLocalNotification(
-        title: 'New Request',
-        body: '$userName has requested your item "${widget.item['name']}"',
-      );
+      // // Show local notification to the donor
+      // await NotificationService.showLocalNotification(
+      //   title: 'New Request',
+      //   body: '$userName has requested your item "${widget.item['name']}"',
 
       // Add a small delay for better UX
       await Future.delayed(Duration(seconds: 1));
@@ -622,12 +647,20 @@ class _ProductPageState extends State<ProductPage> {
                   Row(
                     children: [
                       Icon(Icons.star, color: Colors.yellow[700], size: 20),
-                      const Text(
-                        ' 5.0 ',
+                      Text(
+                        ' ${_donorRating.toStringAsFixed(1)} ',
                         style: TextStyle(fontWeight: FontWeight.bold),
                       ),
                       Text(
-                        '(${widget.item['condition'] ?? 'Unknown condition'})',
+                        '($_ratingCount ${_ratingCount == 1 ? 'rating' : 'ratings'})',
+                        style: TextStyle(
+                          color: Colors.grey[600],
+                          fontSize: 14,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        '• ${widget.item['condition'] ?? 'Unknown condition'}',
                         style: const TextStyle(color: Colors.blue),
                       ),
                     ],

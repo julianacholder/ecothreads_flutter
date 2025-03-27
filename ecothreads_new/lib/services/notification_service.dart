@@ -3,9 +3,9 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'messaging_service.dart';
 
-// Enum defined outside the class to ensure it's accessible
 enum NotificationType { systemNotification, firebasePush, both }
 
 class NotificationService {
@@ -16,12 +16,19 @@ class NotificationService {
   static Stream<QuerySnapshot>? _notificationStream;
   static bool _isInitialized = false;
 
-  // Initialize both Firebase notifications listening and local notifications
+  // Deduplication tracking
+  static final Set<String> _processedNotificationIds = {};
+  static final Set<String> _processedDedupeIds = {};
+
+  // Initialize the notification service
   static Future<void> initialize(BuildContext context) async {
     if (_isInitialized) return;
     _isInitialized = true;
 
-    // Request notification permissions and get token
+    // Load previously processed notifications
+    await _loadProcessedNotifications();
+
+    // Initialize messaging and get token
     await MessagingService.initialize();
     final fcmToken = await MessagingService.messaging.getToken();
 
@@ -43,12 +50,13 @@ class NotificationService {
     );
 
     if (settings.authorizationStatus == AuthorizationStatus.authorized) {
-      // Get the token for this device
-      String? token = await _firebaseMessaging.getToken();
-      print('Firebase Messaging Token: $token');
-
-      // Configure foreground message handling
+      // Configure foreground message handling with deduplication
       FirebaseMessaging.onMessage.listen((RemoteMessage message) {
+        _handleForegroundMessage(context, message);
+      });
+
+      // Handle background/terminated messages
+      FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {
         _handleForegroundMessage(context, message);
       });
     }
@@ -59,28 +67,48 @@ class NotificationService {
       android: AndroidInitializationSettings('@mipmap/ic_launcher'),
       iOS: DarwinInitializationSettings(),
     );
-    await _localNotificationsPlugin.initialize(initializationSettings);
+    await _localNotificationsPlugin.initialize(
+      initializationSettings,
+      onDidReceiveNotificationResponse: (details) {
+        // Handle notification tap
+      },
+    );
 
-    // Initialize Firebase notification listening using the existing currentUser
+    // Initialize Firestore notification stream with deduplication
     if (currentUser != null) {
       _notificationStream = FirebaseFirestore.instance
           .collection('notifications')
           .where('userId', isEqualTo: currentUser.uid)
-          .where('isRead', isEqualTo: false)
+          .orderBy('timestamp', descending: true)
           .snapshots();
 
       _notificationStream?.listen((snapshot) {
         for (var change in snapshot.docChanges) {
           if (change.type == DocumentChangeType.added) {
             final notification = change.doc.data() as Map<String, dynamic>;
+            final notificationId = change.doc.id;
+            final dedupeId = notification['dedupeId'] ?? notificationId;
 
+            // Skip if already processed
+            if (_processedNotificationIds.contains(notificationId) ||
+                _processedDedupeIds.contains(dedupeId)) {
+              continue;
+            }
+
+            // Mark as processed
+            _processedNotificationIds.add(notificationId);
+            _processedDedupeIds.add(dedupeId);
+            _saveProcessedNotification(notificationId, dedupeId);
+
+            // Handle specific notification types
             if (notification['type'] == 'restriction') {
-              _showRestrictionDialog(context, notification, change.doc.id);
-            } else if (notification['type'] == 'item_request') {
-              // Assuming item request notifications should use both methods
+              _showRestrictionDialog(context, notification, notificationId);
+            } else {
               showLocalNotification(
-                title: notification['title'] ?? 'Item Request',
-                body: notification['body'] ?? 'You have a new item request',
+                id: dedupeId.hashCode, // Use hash of dedupeId for stable ID
+                title: notification['title'] ?? 'Notification',
+                body: notification['message'] ?? '',
+                payload: notificationId,
                 notificationType: NotificationType.both,
               );
             }
@@ -90,27 +118,78 @@ class NotificationService {
     }
   }
 
-  // Handle foreground messages
-  static void _handleForegroundMessage(
-      BuildContext context, RemoteMessage message) {
-    if (message.notification != null) {
-      showLocalNotification(
-        title: message.notification?.title ?? '',
-        body: message.notification?.body ?? '',
-        notificationType: NotificationType.systemNotification,
-      );
+  // Load previously processed notifications from cache
+  static Future<void> _loadProcessedNotifications() async {
+    final prefs = await SharedPreferences.getInstance();
+    final notificationIds =
+        prefs.getStringList('processed_notification_ids') ?? [];
+    final dedupeIds = prefs.getStringList('processed_dedupe_ids') ?? [];
+
+    _processedNotificationIds.addAll(notificationIds);
+    _processedDedupeIds.addAll(dedupeIds);
+
+    // Clean up old entries if too many
+    if (_processedNotificationIds.length > 100) {
+      _processedNotificationIds.clear();
+      _processedDedupeIds.clear();
+      await prefs.remove('processed_notification_ids');
+      await prefs.remove('processed_dedupe_ids');
     }
   }
 
-  // Show local notification or Firebase push notification
+  // Save processed notifications to cache
+  static Future<void> _saveProcessedNotification(
+      String notificationId, String dedupeId) async {
+    _processedNotificationIds.add(notificationId);
+    _processedDedupeIds.add(dedupeId);
+
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setStringList(
+      'processed_notification_ids',
+      _processedNotificationIds.toList(),
+    );
+    await prefs.setStringList(
+      'processed_dedupe_ids',
+      _processedDedupeIds.toList(),
+    );
+  }
+
+  // Handle foreground messages with deduplication
+  static void _handleForegroundMessage(
+      BuildContext context, RemoteMessage message) {
+    final notificationId = message.data['originalNotificationId'] ?? '';
+    final dedupeId = message.data['dedupeId'] ?? notificationId;
+
+    // Skip if already processed
+    if (_processedNotificationIds.contains(notificationId) ||
+        _processedDedupeIds.contains(dedupeId)) {
+      return;
+    }
+
+    // Mark as processed
+    _processedNotificationIds.add(notificationId);
+    _processedDedupeIds.add(dedupeId);
+    _saveProcessedNotification(notificationId, dedupeId);
+
+    // Show notification
+    showLocalNotification(
+      id: dedupeId.hashCode,
+      title: message.notification?.title ?? '',
+      body: message.notification?.body ?? '',
+      payload: notificationId,
+      notificationType: NotificationType.systemNotification,
+    );
+  }
+
+  // Show local notification with deduplication
   static Future<void> showLocalNotification({
+    required int id,
     required String title,
     required String body,
+    String? payload,
     NotificationType notificationType = NotificationType.systemNotification,
   }) async {
-    // System Notification (Mobile Notification Tray)
-    if (notificationType == NotificationType.systemNotification ||
-        notificationType == NotificationType.both) {
+    if (notificationType != NotificationType.firebasePush) {
       const NotificationDetails notificationDetails = NotificationDetails(
         android: AndroidNotificationDetails(
           'item_requests',
@@ -120,6 +199,8 @@ class NotificationService {
           playSound: true,
           enableVibration: true,
           icon: '@mipmap/ic_launcher',
+          channelShowBadge: true,
+          styleInformation: BigTextStyleInformation(''),
         ),
         iOS: DarwinNotificationDetails(
           presentAlert: true,
@@ -129,34 +210,16 @@ class NotificationService {
       );
 
       await _localNotificationsPlugin.show(
-        DateTime.now().millisecond,
+        id, // Use stable ID based on dedupeId
         title,
         body,
         notificationDetails,
+        payload: payload,
       );
     }
-
-    // Firebase Push Notification
-    if (notificationType == NotificationType.firebasePush ||
-        notificationType == NotificationType.both) {
-      final token = await MessagingService.messaging.getToken();
-      if (token != null) {
-        await MessagingService.sendPushMessage(
-          token: token,
-          title: title,
-          body: body,
-          data: {'type': 'notification'},
-        );
-      }
-    }
   }
 
-  // Get device token to send to your backend
-  static Future<String?> getDeviceToken() async {
-    return await _firebaseMessaging.getToken();
-  }
-
-  // Show restriction dialog
+  // Restriction dialog remains the same
   static void _showRestrictionDialog(BuildContext context,
       Map<String, dynamic> notification, String notificationId) {
     showDialog(
@@ -187,7 +250,6 @@ class NotificationService {
         actions: [
           TextButton(
             onPressed: () async {
-              // Mark notification as read
               await FirebaseFirestore.instance
                   .collection('notifications')
                   .doc(notificationId)
@@ -203,5 +265,6 @@ class NotificationService {
 
   static void dispose() {
     _isInitialized = false;
+    _notificationStream = null;
   }
 }

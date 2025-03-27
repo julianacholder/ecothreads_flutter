@@ -52,6 +52,10 @@ class _MessageDonorState extends State<MessageDonor> {
   // Donor profile image
   String? _donorProfileImage;
 
+  // Add new state variable
+  bool _hasBeenShipped = false;
+  bool _isLoadingStatus = true;
+
   // Add this helper method
   bool get isDonor {
     final currentUser = FirebaseAuth.instance.currentUser;
@@ -63,6 +67,9 @@ class _MessageDonorState extends State<MessageDonor> {
   @override
   void initState() {
     super.initState();
+
+    // Load shipping status immediately when page opens
+    _loadShippingStatus();
 
     // Initialize Firebase message stream immediately if chatId is provided
     if (widget.chatId != null) {
@@ -279,7 +286,7 @@ class _MessageDonorState extends State<MessageDonor> {
     }
   }
 
-  void _sendMessage() async {
+  Future<void> _sendMessage() async {
     if (messageController.text.isEmpty) return;
 
     // Check for restriction before sending
@@ -307,7 +314,7 @@ class _MessageDonorState extends State<MessageDonor> {
     String messageText = messageController.text;
     String messageDate = DateFormat('EEEE').format(DateTime.now());
     String messageTime =
-        DateFormat('h:mm:ss a').format(DateTime.now()); // Added seconds
+        DateFormat('h:mm a').format(DateTime.now()); // Removed seconds
 
     // Determine which chatId to use
     String? chatIdToUse = widget.chatId ?? _generatedChatId;
@@ -364,12 +371,24 @@ class _MessageDonorState extends State<MessageDonor> {
     // Send the message now that we have a valid chatId
     if (chatIdToUse != null) {
       try {
-        // Add message to Firestore
-        await FirebaseFirestore.instance
+        final batch = FirebaseFirestore.instance.batch();
+        final currentUser = FirebaseAuth.instance.currentUser;
+
+        // Get current user's name
+        final userDoc = await FirebaseFirestore.instance
+            .collection('users')
+            .doc(currentUser?.uid)
+            .get();
+        final senderName = userDoc.data()?['fullName'] ?? 'User';
+
+        // Add message to messages collection
+        final messageRef = FirebaseFirestore.instance
             .collection('chats')
             .doc(chatIdToUse)
             .collection('messages')
-            .add({
+            .doc();
+
+        batch.set(messageRef, {
           'text': messageText,
           'senderId': user.uid,
           'timestamp': FieldValue.serverTimestamp(),
@@ -378,18 +397,40 @@ class _MessageDonorState extends State<MessageDonor> {
           'readBy': [user.uid],
         });
 
-        // Update last message in chat document
-        await FirebaseFirestore.instance
-            .collection('chats')
-            .doc(chatIdToUse)
-            .update({
-          'lastMessage': messageText,
-          'lastMessageTime': FieldValue.serverTimestamp(),
-          'lastSenderId': user.uid,
-          'hasUnreadMessages': true,
-          'unreadCount': FieldValue.increment(1),
-          'readBy': [user.uid],
+        // Create notification document
+        final notificationRef =
+            FirebaseFirestore.instance.collection('notifications').doc();
+
+        batch.set(notificationRef, {
+          'userId': widget.donorId, // Recipient
+          'type': 'new_message',
+          'title': senderName, // Just the sender's name
+          'message': messageText, // The actual message
+          'senderId': user.uid,
+          'senderName': senderName,
+          'chatId': chatIdToUse,
+          'itemId': widget.itemId,
+          'itemName': widget.itemName,
+          'timestamp': FieldValue.serverTimestamp(),
+          'isRead': false,
+          'doNotCount':
+              true, // Add this flag to exclude from notification count
         });
+
+        // Update chat document
+        batch.update(
+          FirebaseFirestore.instance.collection('chats').doc(chatIdToUse),
+          {
+            'lastMessage': messageText,
+            'lastMessageTime': FieldValue.serverTimestamp(),
+            'lastSenderId': user.uid,
+            'hasUnreadMessages': true,
+            'unreadCount': FieldValue.increment(1),
+            'readBy': [user.uid],
+          },
+        );
+
+        await batch.commit();
 
         // Clear the text field
         messageController.clear();
@@ -502,7 +543,7 @@ class _MessageDonorState extends State<MessageDonor> {
       // Prepare message data
       String messageDate = DateFormat('EEEE').format(DateTime.now());
       String messageTime =
-          DateFormat('h:mm:ss a').format(DateTime.now()); // Added seconds
+          DateFormat('h:mm a').format(DateTime.now()); // Removed seconds
 
       // Get or create chat ID
       String? chatIdToUse = widget.chatId ?? _generatedChatId;
@@ -690,12 +731,20 @@ class _MessageDonorState extends State<MessageDonor> {
         centerTitle: true,
         actions: [
           if (widget.showShippingButton &&
-              isDonor) // Only show if user is donor
+              isDonor &&
+              !_isLoadingStatus) // Only show if user is donor
             TextButton.icon(
-              icon: Icon(Icons.local_shipping, color: Colors.blue),
-              label:
-                  Text('Mark as Shipped', style: TextStyle(color: Colors.blue)),
-              onPressed: () => _markAsShipped(context),
+              icon: Icon(
+                Icons.local_shipping,
+                color: _hasBeenShipped ? Colors.grey : Colors.blue,
+              ),
+              label: Text(
+                _hasBeenShipped ? 'Shipped' : 'Mark as Shipped',
+                style: TextStyle(
+                  color: _hasBeenShipped ? Colors.grey : Colors.blue,
+                ),
+              ),
+              onPressed: _hasBeenShipped ? null : () => _markAsShipped(context),
             ),
         ],
       ),
@@ -721,6 +770,28 @@ class _MessageDonorState extends State<MessageDonor> {
         ],
       ),
     );
+  }
+
+  // Add method to check shipping status
+  Future<void> _loadShippingStatus() async {
+    if (widget.chatId != null) {
+      try {
+        final chatDoc = await FirebaseFirestore.instance
+            .collection('chats')
+            .doc(widget.chatId)
+            .get();
+
+        if (mounted && chatDoc.exists) {
+          setState(() {
+            _hasBeenShipped =
+                chatDoc.data()?['donorShippingStatus'] == 'shipped';
+            _isLoadingStatus = false;
+          });
+        }
+      } catch (e) {
+        print('Error loading shipping status: $e');
+      }
+    }
   }
 
   Future<void> _markAsShipped(BuildContext context) async {
@@ -788,6 +859,10 @@ class _MessageDonorState extends State<MessageDonor> {
       );
 
       await batch.commit();
+
+      setState(() {
+        _hasBeenShipped = true;
+      });
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -1007,25 +1082,45 @@ class _MessageDonorState extends State<MessageDonor> {
             constraints: BoxConstraints(
               maxWidth: MediaQuery.of(context).size.width * 0.7,
             ),
-            decoration: BoxDecoration(
-              color: isSent ? Colors.black : Colors.grey[300],
-              borderRadius: isSent
-                  ? BorderRadius.only(
-                      topLeft: Radius.circular(16),
-                      topRight: Radius.circular(16),
-                      bottomLeft: Radius.circular(16),
-                      bottomRight: Radius.circular(4),
-                    )
-                  : BorderRadius.only(
-                      topLeft: Radius.circular(4),
-                      topRight: Radius.circular(16),
-                      bottomLeft: Radius.circular(16),
-                      bottomRight: Radius.circular(16),
+            child: Column(
+              crossAxisAlignment:
+                  isSent ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+              children: [
+                // Message content
+                Container(
+                  decoration: BoxDecoration(
+                    color: isSent ? Colors.black : Colors.grey[300],
+                    borderRadius: isSent
+                        ? BorderRadius.only(
+                            topLeft: Radius.circular(16),
+                            topRight: Radius.circular(16),
+                            bottomLeft: Radius.circular(16),
+                            bottomRight: Radius.circular(4),
+                          )
+                        : BorderRadius.only(
+                            topLeft: Radius.circular(4),
+                            topRight: Radius.circular(16),
+                            bottomLeft: Radius.circular(16),
+                            bottomRight: Radius.circular(16),
+                          ),
+                  ),
+                  child: messageData['type'] == 'image'
+                      ? _buildImageMessage(messageData['imageUrl'], isSent)
+                      : _buildTextMessage(messageData["text"] ?? '', isSent),
+                ),
+                // Time stamp
+                Padding(
+                  padding: const EdgeInsets.only(top: 4.0),
+                  child: Text(
+                    messageData["time"] ?? '',
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: Colors.grey[600],
                     ),
+                  ),
+                ),
+              ],
             ),
-            child: messageData['type'] == 'image'
-                ? _buildImageMessage(messageData['imageUrl'], isSent)
-                : _buildTextMessage(messageData["text"] ?? '', isSent),
           ),
         ],
       ),

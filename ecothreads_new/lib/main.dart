@@ -12,6 +12,7 @@ import 'pages/login_page.dart';
 import 'pages/signup_page.dart';
 import 'pages/usermessages.dart';
 import 'pages/userprofile_page.dart';
+import 'pages/notifications_page.dart';
 import 'services/notification_service.dart';
 import 'pages/onboarding_page.dart';
 import 'constants/colors.dart';
@@ -246,44 +247,42 @@ class _MainScreenState extends State<MainScreen> {
   }
 
   Widget _buildNotificationsIcon() {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return Icon(Icons.notifications_outlined);
+
     return StreamBuilder<QuerySnapshot>(
       stream: FirebaseFirestore.instance
           .collection('notifications')
-          .where('userId', isEqualTo: FirebaseAuth.instance.currentUser?.uid)
+          .where('userId', isEqualTo: user.uid)
           .where('isRead', isEqualTo: false)
+          .where('type', isNotEqualTo: 'new_message')
+          .where('doNotCount', isEqualTo: false)
           .snapshots(),
       builder: (context, snapshot) {
-        int unreadCount = snapshot.hasData ? snapshot.data!.docs.length : 0;
+        final unreadCount = snapshot.hasData ? snapshot.data!.docs.length : 0;
 
         return Stack(
-          clipBehavior: Clip.none,
           children: [
-            Icon(
-              _selectedIndex == 1
-                  ? Icons.notifications
-                  : Icons.notifications_outlined,
-              size: 28,
-            ),
+            Icon(Icons.notifications_outlined),
             if (unreadCount > 0)
               Positioned(
-                right: -2,
-                top: -4,
+                right: 0,
+                top: 0,
                 child: Container(
-                  padding: EdgeInsets.all(4),
+                  padding: EdgeInsets.all(1),
                   decoration: BoxDecoration(
                     color: Colors.red,
-                    shape: BoxShape.circle,
+                    borderRadius: BorderRadius.circular(6),
                   ),
                   constraints: BoxConstraints(
-                    minWidth: 16,
-                    minHeight: 16,
+                    minWidth: 12,
+                    minHeight: 12,
                   ),
                   child: Text(
-                    unreadCount > 9 ? '9+' : unreadCount.toString(),
+                    unreadCount > 99 ? '99+' : unreadCount.toString(),
                     style: TextStyle(
                       color: Colors.white,
-                      fontSize: 10,
-                      fontWeight: FontWeight.bold,
+                      fontSize: 8,
                     ),
                     textAlign: TextAlign.center,
                   ),
