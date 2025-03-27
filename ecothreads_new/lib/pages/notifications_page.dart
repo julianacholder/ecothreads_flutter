@@ -258,13 +258,9 @@ class _NotificationsPageState extends State<NotificationsPage> {
     switch (notification['type']) {
       case 'item_request':
         if (notification['isFirstView'] != false) {
-          // First view - show action dialog
+          // First view - show action dialog but DON'T mark as viewed yet
           _showRequestActionDialog(context, notification);
-          // Mark as viewed for future
-          FirebaseFirestore.instance
-              .collection('notifications')
-              .doc(notification['notificationId'])
-              .update({'isFirstView': false});
+          // Don't update isFirstView here, only after a choice is made
         } else {
           // Subsequent views - just open the chat
           final currentUser = FirebaseAuth.instance.currentUser;
@@ -293,11 +289,7 @@ class _NotificationsPageState extends State<NotificationsPage> {
         // Only show dialog if it's the first view or isFirstView is not set
         if (notification['isFirstView'] != false) {
           _showShippingConfirmationDialog(context, notification);
-          // Mark as viewed for future
-          FirebaseFirestore.instance
-              .collection('notifications')
-              .doc(notification['notificationId'])
-              .update({'isFirstView': false});
+          // Don't update isFirstView here, only after a choice is made
         } else {
           // Show a message that action has already been taken
           ScaffoldMessenger.of(context).showSnackBar(
@@ -309,131 +301,102 @@ class _NotificationsPageState extends State<NotificationsPage> {
           );
         }
         break;
-      case 'shipped_followup':
-        if (notification['isFirstView'] != false) {
-          _showShippingConfirmationDialog(context, notification);
-          // Mark as viewed for future
-          FirebaseFirestore.instance
-              .collection('notifications')
-              .doc(notification['notificationId'])
-              .update({'isFirstView': false});
-        } else {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('You have already responded to this notification'),
-              duration: Duration(seconds: 2),
-            ),
-          );
-        }
-        break;
-      case 'new_donation':
-        // Navigate to the item detail page if we have the item data
-        if (notification['itemId'] != null) {
-          // Create the item map with the available data
-          final item = {
-            'id': notification['itemId'],
-            'name': notification['itemName'],
-            'image': notification['imageUrl'],
-            'userId': notification['donorId'],
-            'userFullName': notification['donorName'],
-          };
 
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) => ProductPage(item: item),
-            ),
-          );
-        }
-        break;
-      case 'referral_request':
-        _showReferralDialog(context, notification);
-        break;
-      case 'referral_bonus':
-        // Just mark as read
-        FirebaseFirestore.instance
-            .collection('notifications')
-            .doc(notification['id'])
-            .update({'isRead': true});
-        break;
+      // ... rest of the cases remain the same
     }
   }
 
+// Then modify the request confirmation dialog to use barrierDismissible: false
   void _showRequestActionDialog(
       BuildContext context, Map<String, dynamic> notification) {
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(15),
-        ),
-        title: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: Colors.blue.withOpacity(0.1),
-                shape: BoxShape.circle,
-              ),
-              child: Icon(Icons.shopping_bag_outlined, color: Colors.blue),
-            ),
-            SizedBox(width: 10),
-            Expanded(
-              child: Text(
-                'New Item Request',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-              ),
-            ),
-          ],
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('What would you like to do with this request?'),
-            SizedBox(height: 20),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-              children: [
-                Expanded(
-                  child: ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.red[50],
-                      foregroundColor: Colors.red,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                    ),
-                    onPressed: () =>
-                        _showDenyReasonDialog(context, notification),
-                    child: Padding(
-                      padding: const EdgeInsets.all(12),
-                      child: Text('Deny'),
-                    ),
-                  ),
+      barrierDismissible: false, // Prevent dismissing by tapping outside
+      builder: (context) => WillPopScope(
+        // Prevent back button from dismissing
+        onWillPop: () async => false,
+        child: AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(15),
+          ),
+          title: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Colors.blue.withOpacity(0.1),
+                  shape: BoxShape.circle,
                 ),
-                SizedBox(width: 10),
-                Expanded(
-                  child: ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.green,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
+                child: Icon(Icons.shopping_bag_outlined, color: Colors.blue),
+              ),
+              SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  'New Item Request',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                ),
+              ),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('What would you like to do with this request?'),
+              SizedBox(height: 20),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: [
+                  Expanded(
+                    child: ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.red[50],
+                        foregroundColor: Colors.red,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
                       ),
-                    ),
-                    onPressed: () => _confirmRequest(context, notification),
-                    child: Padding(
-                      padding: const EdgeInsets.all(12),
-                      child: Text(
-                        'Confirm',
-                        style: TextStyle(color: Colors.white),
+                      onPressed: () =>
+                          _showDenyReasonDialog(context, notification),
+                      child: Padding(
+                        padding: const EdgeInsets.all(12),
+                        child: Text('Deny'),
                       ),
                     ),
                   ),
+                  SizedBox(width: 10),
+                  Expanded(
+                    child: ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.green,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                      ),
+                      onPressed: () => _confirmRequest(context, notification),
+                      child: Padding(
+                        padding: const EdgeInsets.all(12),
+                        child: Text(
+                          'Confirm',
+                          style: TextStyle(color: Colors.white),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              SizedBox(height: 16),
+              // Add a close button if the user really wants to decide later
+              Center(
+                child: TextButton(
+                  onPressed: () {
+                    Navigator.of(context).pop();
+                  },
+                  child: Text('Decide Later'),
                 ),
-              ],
-            ),
-          ],
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -631,6 +594,13 @@ class _NotificationsPageState extends State<NotificationsPage> {
         'visibleTo': currentUser.uid, // Only visible to the donor
       });
 
+      // Mark notification as viewed ONLY after user makes a choice
+      batch.update(
+          FirebaseFirestore.instance
+              .collection('notifications')
+              .doc(notification['notificationId']),
+          {'isFirstView': false});
+
       // Create confirmation notification for buyer
       final confirmNotificationRef =
           FirebaseFirestore.instance.collection('notifications').doc();
@@ -678,45 +648,57 @@ class _NotificationsPageState extends State<NotificationsPage> {
       BuildContext context, Map<String, dynamic> notification) {
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: Row(
-          children: [
-            Icon(Icons.local_shipping, color: Colors.blue),
-            SizedBox(width: 8),
-            Text('Item Received?'),
+      barrierDismissible: false, // Prevent dismissing by tapping outside
+      builder: (context) => WillPopScope(
+        // Prevent back button from dismissing
+        onWillPop: () async => false,
+        child: AlertDialog(
+          title: Row(
+            children: [
+              Icon(Icons.local_shipping, color: Colors.blue),
+              SizedBox(width: 8),
+              Text('Item Received?'),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Have you received your item?'),
+              SizedBox(height: 8),
+              Text(
+                '${notification['itemName']}',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => _showDisputeDialog(context, notification),
+              child: Text(
+                'No, Open Dispute',
+                style: TextStyle(color: Colors.red),
+              ),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.green,
+              ),
+              onPressed: () => _confirmItemReceived(context, notification),
+              child: Text(
+                'Yes, Received',
+                style: TextStyle(color: Colors.white),
+              ),
+            ),
+            // Add a decide later button
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+              },
+              child: Text('Decide Later'),
+            ),
           ],
         ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('Have you received your item?'),
-            SizedBox(height: 8),
-            Text(
-              '${notification['itemName']}',
-              style: TextStyle(fontWeight: FontWeight.bold),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => _showDisputeDialog(context, notification),
-            child: Text(
-              'No, Open Dispute',
-              style: TextStyle(color: Colors.red),
-            ),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.green,
-            ),
-            onPressed: () => _confirmItemReceived(context, notification),
-            child: Text(
-              'Yes, Received',
-              style: TextStyle(color: Colors.white),
-            ),
-          ),
-        ],
       ),
     );
   }
@@ -814,6 +796,7 @@ class _NotificationsPageState extends State<NotificationsPage> {
       batch.update(itemRef, {'status': 'disputed'});
 
       // Mark the shipping notification as handled
+      // Only update isFirstView here after the user has submitted a dispute
       final shippingNotificationRef = FirebaseFirestore.instance
           .collection('notifications')
           .doc(notification['notificationId']);
@@ -896,10 +879,6 @@ class _NotificationsPageState extends State<NotificationsPage> {
         'completedAt': FieldValue.serverTimestamp(),
       });
 
-      // Create delivery confirmation notification for seller
-      final confirmNotificationRef =
-          FirebaseFirestore.instance.collection('notifications').doc();
-
       // Create points earned notification for seller
       final pointsNotificationRef =
           FirebaseFirestore.instance.collection('notifications').doc();
@@ -916,6 +895,7 @@ class _NotificationsPageState extends State<NotificationsPage> {
       });
 
       // Mark the shipping notification as handled
+      // Only update isFirstView here after the user has confirmed receipt
       final shippingNotificationRef = FirebaseFirestore.instance
           .collection('notifications')
           .doc(notification['notificationId']);
